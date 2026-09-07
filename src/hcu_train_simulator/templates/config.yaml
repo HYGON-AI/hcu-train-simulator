@@ -1,0 +1,201 @@
+# model config path
+model_path: D:\LLM\Models\Qwen3-8B\config.json
+
+# Supported model config fields include:
+# - vocab padding: padded_vocab_size, make_vocab_size_divisible_by, or vocab_size_multiple
+# - MoE aliases: num_experts/n_routed_experts, num_experts_per_tok/topk,
+#   num_shared_experts/n_shared_experts, shared_expert_intermediate_size
+# - MLA: q_lora_rank, kv_lora_rank, qk_nope_head_dim, qk_rope_head_dim, v_head_dim
+# - MTP: mtp_num_layers, num_mtp_layers, or num_nextn_predict_layers
+
+# model parallel config
+parallel_config:
+
+  # tensor model parallel size
+  tp_size: 4
+
+  # context model parallel size
+  cp_size: 1
+
+  # expert model parallel size
+  ep_size: 1
+
+  # expert tensor parallel size
+  etp_size: null
+
+  # pipeline parallel size
+  pp_size: 1
+
+  # pipeline schedule: 1f1b or interleaved_1f1b
+  pp_schedule: 1f1b
+
+  # num layers per virtual pipeline stage
+  num_layers_per_vp_stage: null
+
+  # use distributed optimizer
+  use_distributed_optimizer: True
+
+  # num layers in first pp stage
+  decoder_first_pipeline_num_layers: null
+
+  # num layers in last pp stage
+  decoder_last_pipeline_num_layers: null
+
+  # full recompute
+  full_recompute: False
+
+  # shard sequence tokens across tensor-parallel ranks
+  sequence_parallel: True
+  
+  micro_batch_size: 1
+
+  global_batch_size: 256
+
+  seq_length: 4096
+  # Qwen3.5 VLM visual patch tokens encoded per image. null uses
+  # vision_config.num_position_embeddings from the HuggingFace config.
+  vision_seq_length: null
+  vision_num_images: 1
+
+  num_gpus: 8
+
+  # communication overlap mode: auto, manual, or none.
+  # auto uses profiler-calibrated exposed ratios for overlapped collectives.
+  overlap_mode: auto
+  # Enable only when the training framework overlaps MoE expert-parallel
+  # dispatch/combine communication with expert computation.
+  ep_overlap_enabled: False
+
+  # Enable PP P2P overlap only with an interleaved VPP schedule. Non-VPP 1F1B
+  # cannot enable overlap_p2p_comm, so the default is False.
+  overlap_p2p_comm: False
+
+  # MoE expert-parallel communication backend: alltoall or deepep.
+  # deepep uses an embedded heuristic four-phase overlap model; it does not
+  # require an operator profile or a distributed benchmark.
+  ep_communication_backend: alltoall
+
+  # communication time overlap ratio used when overlap_mode is manual
+  tp_overlap_ratio: 0
+
+  cp_overlap_ratio: 0
+
+  dp_overlap_ratio: 0
+
+  ep_overlap_ratio: 0
+
+  etp_overlap_ratio: 0
+
+  edp_overlap_ratio: 0
+
+  pp_overlap_ratio: 0
+
+  # operator benchmark config
+  # Whether MoE experts use Transformer Engine GroupedLinear.
+  moe_grouped_gemm: True
+
+  # Set benchmark_ops to all, or a list such as [te, fa, moe, loss].
+  benchmark_ops: [all]
+
+  # Benchmark precision and runtime controls.
+  benchmark_dtype: bf16
+  benchmark_device: cuda
+  benchmark_allow_cpu: False
+  benchmark_warmup: 5
+  benchmark_iters: 20
+  benchmark_dropout_p: 0.0
+  benchmark_causal: True
+  # Qwen3 q/k RMSNorm standalone benchmark is more conservative than profiler kernels.
+  benchmark_qk_norm_scale: 0.4
+
+  # Attention kernel shape under context parallelism: local or global.
+  benchmark_attention_kv_context: local
+
+  # Optional cap for quick MoE benchmark smoke tests.
+  benchmark_max_local_experts: null
+
+# hardware config
+hardware_config:
+
+  # Tensor Core FP16
+  fp16_tflops: 480
+
+  # Tensor Core FP8
+  fp8_tflops: 960
+
+  # number of GPUs per node
+  gpus_per_node: 8
+
+  # HBM memory
+  hbm_gib: 64
+
+  # Intra-node Interconnect Bandwidth
+  intra_bw_gbps: 448
+
+  # Inter-node Interconnection Bandwidth
+  inter_bw_gbps: 128
+
+  # GEMM Computational Efficiency
+  gemm_efficiency: 0.4
+
+  # Non-GEMM vector/elementwise compute efficiency
+  non_gemm_efficiency: 0.08
+
+  # Optimizer step compute efficiency
+  optimizer_efficiency: 0.04
+
+  # Intra-node P2P communication efficiency
+  p2p_intra_efficiency: 0.8
+
+  # Intra-node P2P collective efficiency
+  collective_intra_efficiency: 0.7
+
+  # Inter-node P2P collective efficiency
+  collective_inter_efficiency: 0.8
+
+# Operator performance profile configuration.
+# mode:
+# - auto: detect the local training environment, reuse validated user/builtin
+#   shapes, and benchmark only missing shapes when the accelerator is idle.
+# - builtin: explicitly select a packaged profile without requiring PyTorch/DCU.
+# - theoretical: disable operator profiles and use analytical estimates only.
+# Relative profile paths are resolved from the directory containing this YAML.
+profile_config:
+  enabled: True
+  mode: auto
+  user_dir: ./profiles/user
+  update_on_benchmark: True
+  # Candidate measurements from an occupied or unverifiable accelerator are
+  # recorded for diagnostics but are never used as performance data.
+  # When operator benchmarking, is it mandatory to ensure that the HCU is in an idle state?
+  require_idle: True
+
+  ignore_gemm_layout: True
+  match_permuted_gemm: True
+
+  # Required only when mode is builtin. Supported packaged selectors:
+  # accelerator: bw1000 or bw1100
+  # torch: "271" or "290"
+  # dtk: "2604"
+  # For other supporting software, such as transformer-engine, flash-attn, etc., please refer to the software versions in the following Docker images:
+  # `harbor.sourcefind.cn:5443/dcu/admin/base/pytorch:2.7.1-ubuntu22.04-dtk26.04-py3.11`
+  # `harbor.sourcefind.cn:5443/dcu/admin/base/pytorch:2.9.0-ubuntu22.04-dtk26.04-py3.11`
+  builtin_selector:
+    accelerator: bw1000
+    torch: "271"
+    dtk: "2604"
+
+# Optimal TGS grid search configuration
+search:
+  enabled: False
+  top_k: 10
+  # Peak memory cannot exceed `hbm_gib - memory_margin_gib`
+  memory_margin_gib: 5
+
+  candidates:
+    tp_size: [1, 2, 4, 8]
+    cp_size: [1]
+    pp_size: [1, 2, 4, 8]
+    ep_size: [1, 2, 4, 8]
+    etp_size: [1, 2, 4]
+    micro_batch_size: [1, 2, 4]

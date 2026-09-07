@@ -1,0 +1,1316 @@
+profile:
+  schema_version: 1
+  benchmark_version: 1
+  name: bw1100_torch271_dtk2604
+  dtype: bf16
+  updated_at: '2026-08-05'
+environment:
+  dtype: bf16
+  hardware:
+    accelerator: bw1100
+    hbm_gib: 64
+    driver: 6.4.0-V1.7.0
+  software:
+    torch: 2.7.1
+    transformer_engine: 2.10.0+das.opt1.dtk2604.torch271
+    flash_attention: 2.6.1+das.opt1.dtk2604.torch271
+    triton: 3.1.0+das.opt1.dtk2604.torch271
+    dtk: DTK-26.04-rc4
+operators:
+  gemm:
+    part=qkv_weight,m=6144,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 3.0170124435424803
+      tflops: 204.99593627721532
+      updated_at: '2026-08-05'
+    part=attn_proj,m=4096,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.9476605939865113
+      tflops: 211.69851753896273
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=24576,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 11.33371961593628
+      tflops: 218.27795695752533
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=4096,n=4096,k=12288,dtype=bf16:
+      status: validated
+      mean_ms: 4.700100164413453
+      tflops: 263.175366051452
+      updated_at: '2026-08-05'
+    part=lm_head,m=151936,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 83.7143019104004
+      tflops: 182.69731923973524
+      updated_at: '2026-08-05'
+    part=vision_patch_embed,m=1024,n=2304,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 92.82939239501952
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_qkv,m=3072,n=2304,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.5336200141906738
+      tflops: 81.49346485430235
+      updated_at: '2026-08-05'
+    part=vision_attn_proj,m=1024,n=2304,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.3213956809043884
+      tflops: 45.10177169528377
+      updated_at: '2026-08-05'
+    part=vision_fc1,m=4096,n=2304,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.6276201558113098
+      tflops: 92.38399684766013
+      updated_at: '2026-08-05'
+    part=vision_fc2,m=1024,n=2304,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.449098299741745
+      tflops: 129.10772213865587
+      updated_at: '2026-08-05'
+    part=vision_merger_fc1,m=4096,n=576,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.5219400417804718
+      tflops: 111.0895004303718
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=2560,n=576,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.42202624201774597
+      tflops: 85.86856207504789
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_fc1,m=4096,n=576,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.5219400417804718
+      tflops: 111.0895004303718
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_fc2,m=2560,n=576,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.42202624201774597
+      tflops: 85.86856207504789
+      updated_at: '2026-08-05'
+    part=qkv_weight,m=6144,n=4096,k=2560,dtype=bf16:
+      status: validated
+      mean_ms: 2.8531688976287843
+      tflops: 135.47990690675624
+      updated_at: '2026-08-05'
+    part=attn_proj,m=2560,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.4091060829162598
+      tflops: 182.88050905768068
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=19456,n=4096,k=2560,dtype=bf16:
+      status: validated
+      mean_ms: 6.863789854049682
+      tflops: 178.3367068905516
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=2560,n=4096,k=9728,dtype=bf16:
+      status: validated
+      mean_ms: 2.8011404037475587
+      tflops: 218.4941671831874
+      updated_at: '2026-08-05'
+    part=lm_head,m=151936,n=4096,k=2560,dtype=bf16:
+      status: validated
+      mean_ms: 83.53014373779297
+      tflops: 114.43756900702022
+      updated_at: '2026-08-05'
+    part=vision_patch_embed,m=288,n=2304,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 99.70657531738281
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_qkv,m=864,n=2304,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.3191012787818909
+      tflops: 43.119270234591276
+      updated_at: '2026-08-05'
+    part=vision_attn_proj,m=1152,n=2304,k=288,dtype=bf16:
+      status: validated
+      mean_ms: 0.32133172035217283
+      tflops: 14.273322966600755
+      updated_at: '2026-08-05'
+    part=vision_fc1,m=1076,n=2304,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.3677797996997833
+      tflops: 46.591919572493296
+      updated_at: '2026-08-05'
+    part=vision_fc2,m=1152,n=2304,k=1076,dtype=bf16:
+      status: validated
+      mean_ms: 0.35013813972473146
+      tflops: 48.93944676084556
+      updated_at: '2026-08-05'
+    part=vision_merger_fc1,m=1152,n=576,k=4608,dtype=bf16:
+      status: validated
+      mean_ms: 0.32372532069683074
+      tflops: 56.67114841838692
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=5120,n=576,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.39675261795520783
+      tflops: 51.37790279761009
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_fc1,m=1152,n=576,k=4608,dtype=bf16:
+      status: validated
+      mean_ms: 0.32372532069683074
+      tflops: 56.67114841838692
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_fc2,m=5120,n=576,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.39675261795520783
+      tflops: 51.37790279761009
+      updated_at: '2026-08-05'
+    part=qkv_weight,m=2560,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 2.6924040651321413
+      tflops: 119.64123489918681
+      updated_at: '2026-08-05'
+    part=attn_proj,m=5120,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 1.5597111988067627
+      tflops: 165.22163715766652
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=12800,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 7.743132619857788
+      tflops: 208.00531452470213
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=5120,n=4096,k=6400,dtype=bf16:
+      status: validated
+      mean_ms: 3.354213309288025
+      tflops: 240.08800089429516
+      updated_at: '2026-08-05'
+    part=lm_head,m=37984,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 19.01447002410889
+      tflops: 251.36084718742987
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=2048,n=576,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.32023731887340545
+      tflops: 25.46151399432397
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_fc2,m=2048,n=576,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.32023731887340545
+      tflops: 25.46151399432397
+      updated_at: '2026-08-05'
+    part=qkv_weight,m=1280,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.711082638502121
+      tflops: 90.60059401212317
+      updated_at: '2026-08-05'
+    part=attn_proj,m=2048,n=4096,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.5640584230422974
+      tflops: 91.37281786169723
+      updated_at: '2026-08-05'
+    part=topk_router,m=128,n=1024,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.35173174023628234
+      tflops: 18.31637639432871
+      updated_at: '2026-08-05'
+    part=moe_linear_fc1,m=1536,n=2048,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=16:
+      status: validated
+      mean_ms: 3.0352622652053833
+      tflops: 50.94084436408252
+      updated_at: '2026-08-05'
+    part=moe_linear_fc2,m=2048,n=768,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=16:
+      status: validated
+      mean_ms: 2.7669962215423585
+      tflops: 27.93983263370947
+      updated_at: '2026-08-05'
+    part=lm_head,m=37984,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 9.674494285583496
+      tflops: 197.61211916584375
+      updated_at: '2026-08-05'
+    part=qkv_weight,m=2304,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.3449747800827025
+      tflops: 172.4405820975608
+      updated_at: '2026-08-05'
+    part=attn_proj,m=4096,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 1.2330386638641357
+      tflops: 167.19543048385376
+      updated_at: '2026-08-05'
+    part=topk_router,m=128,n=1024,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.440106241106987
+      tflops: 29.276798837460166
+      updated_at: '2026-08-05'
+    part=moe_linear_fc1,m=3072,n=4096,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=16:
+      status: validated
+      mean_ms: 12.084748096466065
+      tflops: 51.17816984574634
+      updated_at: '2026-08-05'
+    part=moe_linear_fc2,m=4096,n=1536,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=16:
+      status: validated
+      mean_ms: 20.496332321166992
+      tflops: 15.087462501407817
+      updated_at: '2026-08-05'
+    part=lm_head,m=37984,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 21.878563194274903
+      tflops: 174.76443042953312
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=4096,n=576,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.3572006005048752
+      tflops: 45.65348974483997
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_qkv,m=2048,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.2814323997497559
+      tflops: 160.88123747164468
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_z,m=1024,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.6271785795688629
+      tflops: 164.35385145784002
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_b,m=8,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.3048452603816986
+      tflops: 2.6416889899868248
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_a,m=8,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.31108530044555666
+      tflops: 2.5886995201849383
+      updated_at: '2026-08-05'
+    part=gdn_out_proj,m=4096,n=4096,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.8812621390819549
+      tflops: 116.96771089176897
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=6144,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 2.9977615451812745
+      tflops: 206.31237051464706
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=4096,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 1.618639385700226
+      tflops: 191.04789370871717
+      updated_at: '2026-08-05'
+    part=qwen35_q_proj_gate,m=2048,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.295592453479767
+      tflops: 159.12290138329334
+      updated_at: '2026-08-05'
+    part=qwen35_k_proj,m=256,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.36400375962257386
+      tflops: 70.79543299970321
+      updated_at: '2026-08-05'
+    part=qwen35_v_proj,m=256,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.35988216042518617
+      tflops: 71.60622728715984
+      updated_at: '2026-08-05'
+    part=attn_proj,m=4096,n=4096,k=1024,dtype=bf16:
+      status: validated
+      mean_ms: 0.8732844960689544
+      tflops: 118.03623626436267
+      updated_at: '2026-08-05'
+    part=mtp_fc,m=1024,n=4096,k=8192,dtype=bf16:
+      status: validated
+      mean_ms: 1.0363216018676757
+      tflops: 198.9328697157889
+      updated_at: '2026-08-05'
+    part=lm_head,m=62080,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 80.8856362915039
+      tflops: 77.25942085883551
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_qkv,m=2560,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 2.6903082370758056
+      tflops: 119.7344388872432
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_z,m=1536,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 1.121873733997345
+      tflops: 172.2774341381072
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_b,m=12,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 0.33150134086608884
+      tflops: 4.554881847702539
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_a,m=12,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 0.3305925405025482
+      tflops: 4.5674032381512895
+      updated_at: '2026-08-05'
+    part=gdn_out_proj,m=5120,n=4096,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 1.3848245859146118
+      tflops: 139.56535021535012
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=8704,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 5.726498613357544
+      tflops: 191.25415623524543
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=5120,n=4096,k=4352,dtype=bf16:
+      status: validated
+      mean_ms: 2.4437894153594972
+      tflops: 224.08163600276634
+      updated_at: '2026-08-05'
+    part=qwen35_q_proj_gate,m=3072,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 2.920180516242981
+      tflops: 132.3709457308893
+      updated_at: '2026-08-05'
+    part=qwen35_k_proj,m=256,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 0.4165478605031967
+      tflops: 77.33146121813485
+      updated_at: '2026-08-05'
+    part=qwen35_v_proj,m=256,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 0.4149062782526016
+      tflops: 77.63742418086203
+      updated_at: '2026-08-05'
+    part=attn_proj,m=5120,n=4096,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 1.3833108425140381
+      tflops: 139.71807520046863
+      updated_at: '2026-08-05'
+    part=mtp_fc,m=1280,n=4096,k=10240,dtype=bf16:
+      status: validated
+      mean_ms: 1.723967502117157
+      tflops: 186.84954722430103
+      updated_at: '2026-08-05'
+    part=lm_head,m=62080,n=4096,k=5120,dtype=bf16:
+      status: validated
+      mean_ms: 125.06016342163086
+      tflops: 62.46171087482282
+      updated_at: '2026-08-05'
+    part=vision_patch_embed,m=576,n=2304,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 99.67367736816406
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_qkv,m=1728,n=2304,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.4273542976379395
+      tflops: 64.39347561520098
+      updated_at: '2026-08-05'
+    part=vision_attn_proj,m=1152,n=2304,k=576,dtype=bf16:
+      status: validated
+      mean_ms: 0.4232006400823593
+      tflops: 21.67516298230279
+      updated_at: '2026-08-05'
+    part=vision_fc1,m=2152,n=2304,k=1152,dtype=bf16:
+      status: validated
+      mean_ms: 0.5291592144966125
+      tflops: 64.76525922089823
+      updated_at: '2026-08-05'
+    part=vision_fc2,m=1152,n=2304,k=2152,dtype=bf16:
+      status: validated
+      mean_ms: 0.5042151987552643
+      tflops: 67.96925951578564
+      updated_at: '2026-08-05'
+    part=vision_merger_fc1,m=2304,n=576,k=4608,dtype=bf16:
+      status: validated
+      mean_ms: 0.47033357858657837
+      tflops: 78.01223017557916
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=2048,n=576,k=2304,dtype=bf16:
+      status: validated
+      mean_ms: 0.44985032081604004
+      tflops: 36.25084433066061
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_z,m=2048,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.744282820224762
+      tflops: 138.4946854918291
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_b,m=16,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.41235907971858976
+      tflops: 1.9529250296842575
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_a,m=16,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.41132540166378023
+      tflops: 1.957832812519228
+      updated_at: '2026-08-05'
+    part=gdn_out_proj,m=2048,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.7554571425914764
+      tflops: 136.4461453768284
+      updated_at: '2026-08-05'
+    part=topk_router,m=256,n=2048,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.44184706211090086
+      tflops: 29.16145198848458
+      updated_at: '2026-08-05'
+    part=moe_linear_fc1,m=1024,n=2048,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 4.33574140548706
+      tflops: 47.548599173165165
+      updated_at: '2026-08-05'
+    part=moe_linear_fc2,m=2048,n=512,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 3.997929639816284
+      tflops: 25.783148877211552
+      updated_at: '2026-08-05'
+    part=shared_expert_gate,m=1,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.3332197415828705
+      tflops: 0.15104641688068388
+      updated_at: '2026-08-05'
+    part=shared_expert_fc1,m=512,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.35337980031967164
+      tflops: 72.92381667737749
+      updated_at: '2026-08-05'
+    part=shared_expert_fc2,m=2048,n=4096,k=256,dtype=bf16:
+      status: validated
+      mean_ms: 0.4452807003259659
+      tflops: 28.936582875852604
+      updated_at: '2026-08-05'
+    part=qwen35_k_proj,m=256,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.4194118809700012
+      tflops: 30.72135643415787
+      updated_at: '2026-08-05'
+    part=qwen35_v_proj,m=256,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.4187846803665161
+      tflops: 30.76736684045669
+      updated_at: '2026-08-05'
+    part=attn_proj,m=2048,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 0.72551149725914
+      tflops: 142.07798979535937
+      updated_at: '2026-08-05'
+    part=mtp_fc,m=1024,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 0.634196219444275
+      tflops: 162.53520904669676
+      updated_at: '2026-08-05'
+    part=lm_head,m=124160,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 127.91207061767578
+      tflops: 48.855259597497636
+      updated_at: '2026-08-05'
+    part=vision_merger_fc2,m=3072,n=576,k=2304,dtype=bf16:
+      status: validated
+      mean_ms: 0.3713445407152176
+      tflops: 65.87192821223987
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_qkv,m=6144,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 3.030715126991272
+      tflops: 153.0518206204657
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_z,m=4096,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 1.6134521436691285
+      tflops: 191.66211190421
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_b,m=32,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.32055733978748324
+      tflops: 7.536620766823364
+      updated_at: '2026-08-05'
+    part=gdn_in_proj_a,m=32,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.3231812804937363
+      tflops: 7.475430199141203
+      updated_at: '2026-08-05'
+    part=gdn_out_proj,m=3072,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.5181590032577514
+      tflops: 203.69252802138666
+      updated_at: '2026-08-05'
+    part=topk_router,m=256,n=2048,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.48964878022670744
+      tflops: 39.47186965941472
+      updated_at: '2026-08-05'
+    part=moe_linear_fc1,m=2048,n=3072,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 9.592764205932617
+      tflops: 64.47310465960433
+      updated_at: '2026-08-05'
+    part=moe_linear_fc2,m=3072,n=1024,k=512.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 12.074736309051513
+      tflops: 25.610302154605893
+      updated_at: '2026-08-05'
+    part=shared_expert_gate,m=1,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.31675894021987916
+      tflops: 0.23834361848664226
+      updated_at: '2026-08-05'
+    part=shared_expert_fc1,m=1024,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.5693768334388732
+      tflops: 135.77898991968686
+      updated_at: '2026-08-05'
+    part=shared_expert_fc2,m=3072,n=4096,k=512,dtype=bf16:
+      status: validated
+      mean_ms: 0.6177226030826568
+      tflops: 62.57615549617123
+      updated_at: '2026-08-05'
+    part=qwen35_q_proj_gate,m=8192,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 3.996284737586975
+      tflops: 154.7625685444641
+      updated_at: '2026-08-05'
+    part=qwen35_k_proj,m=256,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.3423589181900024
+      tflops: 56.4534814345736
+      updated_at: '2026-08-05'
+    part=qwen35_v_proj,m=256,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 0.34056373953819274
+      tflops: 56.75105887141142
+      updated_at: '2026-08-05'
+    part=attn_proj,m=3072,n=4096,k=4096,dtype=bf16:
+      status: validated
+      mean_ms: 1.492888901233673
+      tflops: 207.14042756728682
+      updated_at: '2026-08-05'
+    part=mtp_fc,m=1536,n=4096,k=6144,dtype=bf16:
+      status: validated
+      mean_ms: 1.2370643997192383
+      tflops: 187.4827487046252
+      updated_at: '2026-08-05'
+    part=lm_head,m=124160,n=4096,k=3072,dtype=bf16:
+      status: validated
+      mean_ms: 196.9750241088867
+      tflops: 47.58860249377725
+      updated_at: '2026-08-05'
+    part=mla_q_down,m=1536,n=4096,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 1.41720534324646
+      tflops: 190.9271235374845
+      updated_at: '2026-08-05'
+    part=mla_q_up,m=3072,n=4096,k=1536,dtype=bf16:
+      status: validated
+      mean_ms: 1.1992498207092286
+      tflops: 96.69721436641082
+      updated_at: '2026-08-05'
+    part=mla_kv_down,m=576,n=4096,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 0.733121143579483
+      tflops: 138.406323779692
+      updated_at: '2026-08-05'
+    part=mla_kv_up,m=4096,n=4096,k=512,dtype=bf16:
+      status: validated
+      mean_ms: 0.8068076741695404
+      tflops: 63.880908922997676
+      updated_at: '2026-08-05'
+    part=attn_proj,m=7168,n=4096,k=2048,dtype=bf16:
+      status: validated
+      mean_ms: 1.5063925766944886
+      tflops: 104.78015529945851
+      updated_at: '2026-08-05'
+    part=linear_fc1,m=4608,n=4096,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 4.843767318725586
+      tflops: 167.58625374217485
+      updated_at: '2026-08-05'
+    part=linear_fc2,m=7168,n=4096,k=2304,dtype=bf16:
+      status: validated
+      mean_ms: 2.222217769622803
+      tflops: 182.64385022035566
+      updated_at: '2026-08-05'
+    part=topk_router,m=256,n=512,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 0.7069898808002472
+      tflops: 63.78755599295734
+      updated_at: '2026-08-05'
+    part=moe_linear_fc1,m=4096,n=7168,k=128.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 15.202634353637695
+      tflops: 47.46246531643682
+      updated_at: '2026-08-05'
+    part=moe_linear_fc2,m=7168,n=2048,k=128.0,dtype=bf16,grouped_gemm=True,num_gemms=32:
+      status: validated
+      mean_ms: 8.569529838562012
+      tflops: 42.10000544493573
+      updated_at: '2026-08-05'
+    part=shared_expert_fc1,m=512,n=4096,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 0.6897290790081024
+      tflops: 130.76774049559896
+      updated_at: '2026-08-05'
+    part=shared_expert_fc2,m=7168,n=4096,k=256,dtype=bf16:
+      status: validated
+      mean_ms: 1.063022403717041
+      tflops: 42.42352414239815
+      updated_at: '2026-08-05'
+    part=mtp_fc,m=896,n=4096,k=14336,dtype=bf16:
+      status: validated
+      mean_ms: 1.6980537176132202
+      tflops: 185.90701400172375
+      updated_at: '2026-08-05'
+    part=lm_head,m=16160,n=4096,k=7168,dtype=bf16:
+      status: validated
+      mean_ms: 12.94840000152588
+      tflops: 219.85403683424434
+      updated_at: '2026-08-05'
+  flash_attention:
+    batch=1,seq=4096,heads=32,head_dim=128,value_head_dim=128,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 6.654470911026001
+      tflops: 41.307252014363186
+      updated_at: '2026-08-05'
+    batch=1,seq=2304,heads=16,head_dim=64,value_head_dim=128,dtype=bf16,causal=false:
+      status: validated
+      mean_ms: 1.1323857450485229
+      tflops: 19.201294286045872
+      updated_at: '2026-08-05'
+    batch=1,seq=2304,heads=4,head_dim=72,value_head_dim=128,dtype=bf16,causal=false:
+      status: validated
+      mean_ms: 0.5867785406112671
+      tflops: 10.42181131169093
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=16,head_dim=128,value_head_dim=128,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 3.5631479120254514
+      tflops: 38.5723402074189
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=8,head_dim=128,value_head_dim=128,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 1.97622700214386
+      tflops: 34.7730684083617
+      updated_at: '2026-08-05'
+    batch=1,seq=2304,heads=4,head_dim=72,value_head_dim=256,dtype=bf16,causal=false:
+      status: validated
+      mean_ms: 0.5871784830093384
+      tflops: 10.414712747406215
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=4,head_dim=256,value_head_dim=256,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 3.3430643844604493
+      tflops: 20.55583405914299
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=6,head_dim=256,value_head_dim=256,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 4.34888030052185
+      tflops: 23.702472356305332
+      updated_at: '2026-08-05'
+    batch=1,seq=2304,heads=8,head_dim=72,value_head_dim=256,dtype=bf16,causal=false:
+      status: validated
+      mean_ms: 0.8952013599872589
+      tflops: 13.66239039692039
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=8,head_dim=256,value_head_dim=256,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 6.045526542663574
+      tflops: 22.73399223410676
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=16,head_dim=256,value_head_dim=256,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 10.909579391479491
+      tflops: 25.196013254065765
+      updated_at: '2026-08-05'
+    batch=1,seq=4096,heads=16,head_dim=192,value_head_dim=128,dtype=bf16,causal=true:
+      status: validated
+      mean_ms: 4.925821781158447
+      tflops: 34.87716354195759
+      updated_at: '2026-08-05'
+  non_gemm:
+    part=qk_norm,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 4.368675556182861
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 0.9318990230560302
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=50331648,dtype=bf16:
+      status: validated
+      mean_ms: 3.9149692392349245
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.48430797934532166
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.6524041616916656
+      tflops: null
+      updated_at: '2026-08-05'
+    part=cross_entropy,elements=622329856,dtype=bf16:
+      status: validated
+      mean_ms: 23.000711250305176
+      tflops: null
+      updated_at: '2026-08-05'
+    part=optimizer_step,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 1.1544529724121093
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_position_add,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.12153300017118454
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm1,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.22499233931303025
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm2,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.22499233931303025
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_rope,elements=4718592,dtype=bf16:
+      status: validated
+      mean_ms: 0.9305036592483521
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_gelu,elements=9437184,dtype=bf16:
+      status: validated
+      mean_ms: 0.4588806974887848
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_residual_add,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.11925137996673583
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_norm,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.22499233931303025
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_gelu,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.1463970410823822
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_norm,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.22770916014909745
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_gelu,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.1463970410823822
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_add,elements=1474560,dtype=bf16:
+      status: validated
+      mean_ms: 0.11925137996673583
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=39845888,dtype=bf16:
+      status: validated
+      mean_ms: 3.10362407207489
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=10485760,dtype=bf16:
+      status: validated
+      mean_ms: 0.31980525970458984
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=10485760,dtype=bf16:
+      status: validated
+      mean_ms: 0.969092618227005
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_position_add,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.12507541954517365
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm1,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.25238439977169036
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm2,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.25238439977169036
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_rope,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.6557514178752899
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_gelu,elements=2479104,dtype=bf16:
+      status: validated
+      mean_ms: 0.1512034198641777
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_residual_add,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.1238434000313282
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_norm,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.25238439977169036
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_gelu,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.11637135997414588
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_norm,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.25137000054121017
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_merger_gelu,elements=663552,dtype=bf16:
+      status: validated
+      mean_ms: 0.11637135997414588
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_add,elements=737280,dtype=bf16:
+      status: validated
+      mean_ms: 0.1238434000313282
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=9437184,dtype=bf16:
+      status: validated
+      mean_ms: 2.1768257141113283
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=9437184,dtype=bf16:
+      status: validated
+      mean_ms: 0.5385832214355468
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=26214400,dtype=bf16:
+      status: validated
+      mean_ms: 2.0673984241485597
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=5242880,dtype=bf16:
+      status: validated
+      mean_ms: 0.5956104171276092
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 1.607211980819702
+      tflops: null
+      updated_at: '2026-08-05'
+    part=cross_entropy,elements=155582464,dtype=bf16:
+      status: validated
+      mean_ms: 6.333817873001099
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_deepstack_add,elements=294912,dtype=bf16:
+      status: validated
+      mean_ms: 0.12458581998944282
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=4718592,dtype=bf16:
+      status: validated
+      mean_ms: 1.2462802410125733
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=4718592,dtype=bf16:
+      status: validated
+      mean_ms: 0.34473328113555907
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mlp_rmsnorm,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.41479421973228453
+      tflops: null
+      updated_at: '2026-08-05'
+    part=moe_swiglu_activation,elements=393216,dtype=bf16:
+      status: validated
+      mean_ms: 0.33381806015968324
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=2097152,dtype=bf16:
+      status: validated
+      mean_ms: 0.30211880266666413
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.41479421973228453
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=8912896,dtype=bf16:
+      status: validated
+      mean_ms: 2.0552447032928467
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=8912896,dtype=bf16:
+      status: validated
+      mean_ms: 0.5233863770961762
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mlp_rmsnorm,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.6277641999721527
+      tflops: null
+      updated_at: '2026-08-05'
+    part=moe_swiglu_activation,elements=786432,dtype=bf16:
+      status: validated
+      mean_ms: 0.592791337966919
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=4194304,dtype=bf16:
+      status: validated
+      mean_ms: 0.4854790407419205
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_causal_conv1d,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 2.0763264513015747
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gate_preprocess,elements=65536,dtype=bf16:
+      status: validated
+      mean_ms: 0.19853473991155624
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_qk_l2norm,elements=4194304,dtype=bf16:
+      status: validated
+      mean_ms: 1.0315791964530945
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gated_rmsnorm,elements=4194304,dtype=bf16:
+      status: validated
+      mean_ms: 0.9872591817378997
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.0344176292419434
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=5242880,dtype=bf16:
+      status: validated
+      mean_ms: 1.2200723004341125
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=1310720,dtype=bf16:
+      status: validated
+      mean_ms: 0.6576458382606506
+      tflops: null
+      updated_at: '2026-08-05'
+    part=attention_output_gate,elements=4194304,dtype=bf16:
+      status: validated
+      mean_ms: 0.24469478011131288
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_embedding,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.627780157327652
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_hidden,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.627780157327652
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_final_norm,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.627780157327652
+      tflops: null
+      updated_at: '2026-08-05'
+    part=cross_entropy,elements=254279680,dtype=bf16:
+      status: validated
+      mean_ms: 9.935113124847412
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_causal_conv1d,elements=10485760,dtype=bf16:
+      status: validated
+      mean_ms: 2.5021895122528077
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gate_preprocess,elements=98304,dtype=bf16:
+      status: validated
+      mean_ms: 0.20168993949890138
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gated_rmsnorm,elements=6291456,dtype=bf16:
+      status: validated
+      mean_ms: 1.3824629616737365
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=17825792,dtype=bf16:
+      status: validated
+      mean_ms: 1.4357750511169434
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=7340032,dtype=bf16:
+      status: validated
+      mean_ms: 1.5687769150733948
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=1835008,dtype=bf16:
+      status: validated
+      mean_ms: 0.6715978598594665
+      tflops: null
+      updated_at: '2026-08-05'
+    part=attention_output_gate,elements=6291456,dtype=bf16:
+      status: validated
+      mean_ms: 0.34161656081676484
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_embedding,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 1.6082008695602417
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_hidden,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 1.6082008695602417
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_final_norm,elements=20971520,dtype=bf16:
+      status: validated
+      mean_ms: 1.6082008695602417
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gated_delta_rule,elements=805306368,dtype=bf16:
+      status: validated
+      mean_ms: 4.170674924850464
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_position_add,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.13047381952404977
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm1,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.2509796214103699
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_norm2,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.2509796214103699
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_rope,elements=2654208,dtype=bf16:
+      status: validated
+      mean_ms: 0.6956203174591065
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_gelu,elements=4958208,dtype=bf16:
+      status: validated
+      mean_ms: 0.2631108224391937
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_residual_add,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.12512341946363448
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_norm,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.2509796214103699
+      tflops: null
+      updated_at: '2026-08-05'
+    part=vision_merger_gelu,elements=1327104,dtype=bf16:
+      status: validated
+      mean_ms: 0.11471698015928268
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_causal_conv1d,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 3.514251914024353
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gate_preprocess,elements=131072,dtype=bf16:
+      status: validated
+      mean_ms: 0.20529633939266204
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_qk_l2norm,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 1.8750429987907409
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gated_delta_rule,elements=1073741824,dtype=bf16:
+      status: validated
+      mean_ms: 4.873549737930298
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gated_rmsnorm,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 1.8023419046401978
+      tflops: null
+      updated_at: '2026-08-05'
+    part=moe_swiglu_activation,elements=262144,dtype=bf16:
+      status: validated
+      mean_ms: 0.2497123584151268
+      tflops: null
+      updated_at: '2026-08-05'
+    part=shared_swiglu_activation,elements=1048576,dtype=bf16:
+      status: validated
+      mean_ms: 0.19355230003595353
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=2359296,dtype=bf16:
+      status: validated
+      mean_ms: 0.7089931797981263
+      tflops: null
+      updated_at: '2026-08-05'
+    part=attention_output_gate,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.43539253890514373
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_embedding,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.4172102212905884
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_hidden,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.4172102212905884
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_final_norm,elements=8388608,dtype=bf16:
+      status: validated
+      mean_ms: 0.4172102212905884
+      tflops: null
+      updated_at: '2026-08-05'
+    part=cross_entropy,elements=508559360,dtype=bf16:
+      status: validated
+      mean_ms: 19.5818208694458
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_causal_conv1d,elements=25165824,dtype=bf16:
+      status: validated
+      mean_ms: 5.1297745037078855
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gate_preprocess,elements=262144,dtype=bf16:
+      status: validated
+      mean_ms: 0.2004258793592453
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gated_delta_rule,elements=2147483648,dtype=bf16:
+      status: validated
+      mean_ms: 8.789142570495606
+      tflops: null
+      updated_at: '2026-08-05'
+    part=gdn_gated_rmsnorm,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 3.320350308418274
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mlp_rmsnorm,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.1060306859016418
+      tflops: null
+      updated_at: '2026-08-05'
+    part=moe_swiglu_activation,elements=524288,dtype=bf16:
+      status: validated
+      mean_ms: 0.41481028199195863
+      tflops: null
+      updated_at: '2026-08-05'
+    part=shared_swiglu_activation,elements=2097152,dtype=bf16:
+      status: validated
+      mean_ms: 0.24658919930458068
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=6291456,dtype=bf16:
+      status: validated
+      mean_ms: 0.3737701803445816
+      tflops: null
+      updated_at: '2026-08-05'
+    part=qk_norm,elements=17825792,dtype=bf16:
+      status: validated
+      mean_ms: 3.1972661924362185
+      tflops: null
+      updated_at: '2026-08-05'
+    part=rope,elements=4456448,dtype=bf16:
+      status: validated
+      mean_ms: 0.8728750002384186
+      tflops: null
+      updated_at: '2026-08-05'
+    part=attention_output_gate,elements=16777216,dtype=bf16:
+      status: validated
+      mean_ms: 0.7406987941265106
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_embedding,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.1060306859016418
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_hidden,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.1060306859016418
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_final_norm,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.1060306859016418
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=12582912,dtype=bf16:
+      status: validated
+      mean_ms: 1.1060306859016418
+      tflops: null
+      updated_at: '2026-08-05'
+    part=attention_rmsnorm,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=swiglu_activation,elements=9437184,dtype=bf16:
+      status: validated
+      mean_ms: 0.8373773181438446
+      tflops: null
+      updated_at: '2026-08-05'
+    part=residual_dropout_add,elements=3670016,dtype=bf16:
+      status: validated
+      mean_ms: 0.8190892362594604
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mlp_rmsnorm,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_embedding,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_pre_fc_norm_hidden,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=mtp_final_norm,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=final_rmsnorm,elements=29360128,dtype=bf16:
+      status: validated
+      mean_ms: 2.187516803741455
+      tflops: null
+      updated_at: '2026-08-05'
+    part=cross_entropy,elements=66191360,dtype=bf16:
+      status: validated
+      mean_ms: 3.0678670501708982
+      tflops: null
+      updated_at: '2026-08-05'
+candidates:
+  gemm: {}
+  flash_attention: {}
+  non_gemm: {}

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hcu-train-simulator"
+version = "1.0.0"
+description = "LLM training performance simulator"
+dependencies = [
+    "pyyaml",
+    "tabulate"
+]
+
+[project.scripts]
+hcu-train-sim = "hcu_train_simulator.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hcu_train_simulator = [
+    "templates/*.yaml",
+    "communication/bandwidth/*.txt",
+    "profiles/builtin/*.yaml",
+]

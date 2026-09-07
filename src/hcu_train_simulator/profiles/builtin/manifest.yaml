@@ -1,0 +1,16 @@
+schema_version: 1
+profiles:
+  - id: bw1000_torch271_dtk2604
+    file: bw1000_torch271_dtk2604.yaml
+    accelerator: bw1000
+    torch: "271"
+    dtk: "2604"
+    dtype: bf16
+    status: validated
+  - id: bw1100_torch271_dtk2604
+    file: bw1100_torch271_dtk2604.yaml
+    accelerator: bw1100
+    torch: "271"
+    dtk: "2604"
+    dtype: bf16
+    status: validated
