@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 from hcu_train_simulator.models.base import ModelAdapter, NormalizedModelInput
 from hcu_train_simulator.models.registry import (

@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 
 def get_num_microbatches(global_batch_size, micro_batch_size, dp_size):

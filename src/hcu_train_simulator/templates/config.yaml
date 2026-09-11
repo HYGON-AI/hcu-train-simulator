@@ -1,5 +1,5 @@
 # model config path
-model_path: D:\LLM\Models\Qwen3-8B\config.json
+model_path: /models/Qwen3-8B/config.json
 
 # Supported model config fields include:
 # - vocab padding: padded_vocab_size, make_vocab_size_divisible_by, or vocab_size_multiple
@@ -157,7 +157,7 @@ hardware_config:
 # mode:
 # - auto: detect the local training environment, reuse validated user/builtin
 #   shapes, and benchmark only missing shapes when the accelerator is idle.
-# - builtin: explicitly select a packaged profile without requiring PyTorch/DCU.
+# - builtin: explicitly select a packaged profile without requiring PyTorch/HCU.
 # - theoretical: disable operator profiles and use analytical estimates only.
 # Relative profile paths are resolved from the directory containing this YAML.
 profile_config:
@@ -178,8 +178,8 @@ profile_config:
   # torch: "271" or "290"
   # dtk: "2604"
   # For other supporting software, such as transformer-engine, flash-attn, etc., please refer to the software versions in the following Docker images:
-  # `harbor.sourcefind.cn:5443/dcu/admin/base/pytorch:2.7.1-ubuntu22.04-dtk26.04-py3.11`
-  # `harbor.sourcefind.cn:5443/dcu/admin/base/pytorch:2.9.0-ubuntu22.04-dtk26.04-py3.11`
+  # `harbor.sourcefind.cn:5443/hcu/admin/base/pytorch:2.7.1-ubuntu22.04-dtk26.04-py3.11`
+  # `harbor.sourcefind.cn:5443/hcu/admin/base/pytorch:2.9.0-ubuntu22.04-dtk26.04-py3.11`
   builtin_selector:
     accelerator: bw1000
     torch: "271"

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
 from dataclasses import asdict
 
 from hcu_train_simulator.config.loader import get_logger, initialize_simulation, validate_config

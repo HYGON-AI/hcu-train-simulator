@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 module load compiler/dtk/25.04.4
 module load mpi/hpcx/2.18.0/gcc-8.5.0/shca

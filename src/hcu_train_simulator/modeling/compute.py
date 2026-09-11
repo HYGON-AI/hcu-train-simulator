@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 from hcu_train_simulator.config.utils import flatten_dataclass
 from hcu_train_simulator.context import get_config

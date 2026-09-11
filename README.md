@@ -251,7 +251,7 @@ hcu-train-sim search config.yaml
 
 Profile 可通过 `profile_config.mode` 选择以下模式：
 
-- `auto`：检测当前 Torch/DCU 训练环境，按算子 shape 依次查询用户 Profile、内置 Profile，并只对缺失 shape 进行实测。
+- `auto`：检测当前 Torch/HCU 训练环境，按算子 shape 依次查询用户 Profile、内置 Profile，并只对缺失 shape 进行实测。
 - `builtin`：没有训练环境时，根据 `builtin_selector` 显式选择内置 Profile。当前 selector 支持 `bw1000`/`bw1100`、Torch `271`/`290` 和 DTK `2604`。
 - `theoretical`：不使用任何实测 Profile，全部使用理论计算结果。
 
@@ -280,3 +280,17 @@ GEMM 和 Flash Attention 的 validated shape 只保存 `status`、`mean_ms`、`t
 新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。具体接口和验收清单见 [模型插件开发指南](docs/model_plugins.md)。
 
 
+## License
+
+本项目名称：**hcu-train-simulator**
+
+本项目基于 [Apache License 2.0](LICENSE)（`Apache-2.0` / SPDX）开源。
+
+Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+
+- 许可证全文：[LICENSE](LICENSE)
+- 版权声明：[NOTICE](NOTICE)
+
+## Third-Party
+
+第三方依赖与来源清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本仓库不内嵌 `vendor/` / `third_party/` 源码副本；Go 依赖通过 Modules 拉取，明细与许可证以该清单为准。

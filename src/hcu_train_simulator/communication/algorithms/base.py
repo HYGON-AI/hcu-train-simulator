@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
 from hcu_train_simulator.communication.flows import FlowGraph

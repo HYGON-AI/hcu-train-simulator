@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
 
 from hcu_train_simulator.modeling.te_spec import (
     build_multi_token_predictor_spec,
