@@ -1,0 +1,75 @@
+# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Test
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulation-st:
+    name: Simulation ST
+    runs-on: [self-hosted, Linux, X64, ci, nmz3, bw1100]
+    timeout-minutes: 10
+    env:
+      TEST_IMAGE: hcu-train-simulator:1.0.0
+      TEST_CONTAINER: >-
+        hcu-train-simulator-pr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+
+      - name: Check test image
+        run: docker image inspect "$TEST_IMAGE" >/dev/null
+
+      - name: Run simulation ST tests
+        shell: bash
+        run: |
+          set -o pipefail
+
+          # The nmz3 Docker policy does not permit GitHub Actions workspace
+          # bind mounts. Stream the already checked-out PR merge revision into
+          # an isolated in-memory filesystem inside the test container.
+          tar --exclude=.git -C "$GITHUB_WORKSPACE" -cf - . | docker run --rm -i \
+            --name "$TEST_CONTAINER" \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" \
+            --memory 4g \
+            --memory-swap 4g \
+            --cpus 4 \
+            --pids-limit 256 \
+            --tmpfs /tmp:rw,nosuid,size=512m \
+            --tmpfs /ci:rw,nosuid,nodev,size=512m,mode=1777 \
+            --workdir /ci \
+            --env HOME=/tmp \
+            --env PYTHONDONTWRITEBYTECODE=1 \
+            --env PYTHONPATH=/ci/workspace/src \
+            "$TEST_IMAGE" \
+            /bin/sh -c \
+            'mkdir -p /ci/workspace &&
+             tar -C /ci/workspace -xf - &&
+             cd /ci/workspace &&
+             exec python -m unittest
+               tests.st.test_dense_simulation
+               tests.st.test_moe_simulation
+               tests.st.test_mla_mtp_simulation
+               -v'
+
+      - name: Cleanup test container
+        if: always()
+        run: docker rm --force "$TEST_CONTAINER" >/dev/null 2>&1 || true
