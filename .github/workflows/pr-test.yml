@@ -35,8 +35,14 @@ jobs:
         run: docker image inspect "$TEST_IMAGE" >/dev/null
 
       - name: Run MLA/MTP simulation tests
+        shell: bash
         run: |
-          docker run --rm \
+          set -o pipefail
+
+          # The nmz3 Docker policy does not permit GitHub Actions workspace
+          # bind mounts. Stream the already checked-out PR merge revision into
+          # an isolated in-memory filesystem inside the test container.
+          tar --exclude=.git -C "$GITHUB_WORKSPACE" -cf - . | docker run --rm -i \
             --name "$TEST_CONTAINER" \
             --network none \
             --read-only \
@@ -48,13 +54,17 @@ jobs:
             --cpus 4 \
             --pids-limit 256 \
             --tmpfs /tmp:rw,nosuid,size=512m \
-            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            --workdir /workspace \
+            --tmpfs /ci:rw,nosuid,nodev,size=512m,mode=1777 \
+            --workdir /ci \
             --env HOME=/tmp \
             --env PYTHONDONTWRITEBYTECODE=1 \
-            --env PYTHONPATH=/workspace/src \
+            --env PYTHONPATH=/ci/workspace/src \
             "$TEST_IMAGE" \
-            python -m unittest tests.st.test_mla_mtp_simulation -v
+            /bin/sh -c \
+            'mkdir -p /ci/workspace &&
+             tar -C /ci/workspace -xf - &&
+             cd /ci/workspace &&
+             exec python -m unittest tests.st.test_mla_mtp_simulation -v'
 
       - name: Cleanup test container
         if: always()
