@@ -227,7 +227,7 @@ hcu-train-sim search config.yaml
 
 执行上述命令后，会读取 `config.yaml` 中的 `search.candidates` 生成候选组合，对每个有效组合执行显存、计算和通信估算，并按 TGS 从高到低输出最多 10 条结果。超过 `hbm_gib - memory_margin_gib` 的组合会被过滤；无效并行组合（例如 GPU 数量不能整除并行维度、TP 不能整除 KV Head、PP 不能整除层数等）会被跳过。
 
-### 自动求解训练配置
+#### 3.2.6 自动求解训练配置
 
 `solve` 复用同一个 `config.yaml` 中的 `model_path`、`hardware_config` 和训练选项，
 不需要额外维护一份 YAML：
@@ -244,7 +244,7 @@ hcu-train-sim solve config.yaml --model-path /path/to/config.json --seq-length 8
 方案的并行配置、峰值显存、单步时间、MFU 和 TGS。未知模型族会降级为通用
 Transformer/MoE 规模近似，无法识别的额外字段会被忽略并在终端打印假设。
 
-#### 3.2.6 算子性能 Profile
+#### 3.2.7 算子性能 Profile
 
 工具包含只读的内置算子 Profile，资源位于 Python 包的
 `hcu_train_simulator/profiles/builtin/` 下。`hcu-train-sim init` 只生成
@@ -278,7 +278,7 @@ GEMM 和 Flash Attention 的 validated shape 只保存 `status`、`mean_ms`、`t
 
 ## 4. 扩展新模型
 
-新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。具体接口和验收清单见 [模型插件开发指南](docs/model_plugins.md)。
+新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。
 
 
 ## License
