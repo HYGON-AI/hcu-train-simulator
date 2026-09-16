@@ -1,5 +1,5 @@
 # model config path
-model_path: /models/Qwen3-8B/config.json
+model_path: /Models/Qwen3-8B/config.json
 
 # Supported model config fields include:
 # - vocab padding: padded_vocab_size, make_vocab_size_divisible_by, or vocab_size_multiple
@@ -44,6 +44,10 @@ parallel_config:
   # full recompute
   full_recompute: False
 
+  # Use FP8 theoretical compute for attention QKV/projection, Flash Attention,
+  # and routed-expert FC1/FC2; use 1-byte payloads for TP/ETP/EP communication.
+  use_fp8_training: False
+
   # shard sequence tokens across tensor-parallel ranks
   sequence_parallel: True
   
@@ -62,8 +66,8 @@ parallel_config:
   # communication overlap mode: auto, manual, or none.
   # auto uses profiler-calibrated exposed ratios for overlapped collectives.
   overlap_mode: auto
-  # Enable only when the training framework overlaps MoE expert-parallel
-  # dispatch/combine communication with expert computation.
+  # Enable only with interleaved VPP when the training framework overlaps MoE
+  # expert-parallel dispatch/combine communication with expert computation.
   ep_overlap_enabled: False
 
   # Enable PP P2P overlap only with an interleaved VPP schedule. Non-VPP 1F1B
@@ -75,7 +79,9 @@ parallel_config:
   # require an operator profile or a distributed benchmark.
   ep_communication_backend: alltoall
 
-  # communication time overlap ratio used when overlap_mode is manual
+  # communication time overlap ratio used when overlap_mode is manual.
+  # When P2P overlap is enabled and this value is null, PP alone falls back to
+  # the conservative automatic overlap model.
   tp_overlap_ratio: 0
 
   cp_overlap_ratio: 0
@@ -88,7 +94,7 @@ parallel_config:
 
   edp_overlap_ratio: 0
 
-  pp_overlap_ratio: 0
+  pp_overlap_ratio: null
 
   # operator benchmark config
   # Whether MoE experts use Transformer Engine GroupedLinear.
@@ -117,6 +123,9 @@ parallel_config:
 # hardware config
 hardware_config:
 
+  # true: use built-in measured bandwidth tables; false: use bandwidths below
+  use_bandwidth_table: True
+
   # Tensor Core FP16
   fp16_tflops: 480
 
@@ -130,10 +139,10 @@ hardware_config:
   hbm_gib: 64
 
   # Intra-node Interconnect Bandwidth
-  intra_bw_gbps: 448
+  intra_bw_gbps: 224
 
   # Inter-node Interconnection Bandwidth
-  inter_bw_gbps: 128
+  inter_bw_gbps: 64
 
   # GEMM Computational Efficiency
   gemm_efficiency: 0.4
@@ -150,7 +159,7 @@ hardware_config:
   # Intra-node P2P collective efficiency
   collective_intra_efficiency: 0.7
 
-  # Inter-node P2P collective efficiency
+  # Inter-node P2P collective efficiency  (collectives and PP P2P)
   collective_inter_efficiency: 0.8
 
 # Operator performance profile configuration.
@@ -198,4 +207,10 @@ search:
     pp_size: [1, 2, 4, 8]
     ep_size: [1, 2, 4, 8]
     etp_size: [1, 2, 4]
+    # Omit num_layers_per_vp_stage to derive every legal VPP candidate from the
+    # model layer count and PP size. To restrict the grid, uncomment and provide
+    # explicit layers-per-virtual-stage values; null keeps non-interleaved 1F1B.
+    # For MoE, non-null values also enable EP overlap unless explicitly
+    # overridden by an ep_overlap_enabled candidate.
+    # num_layers_per_vp_stage: [null, 1, 2, 4]
     micro_batch_size: [1, 2, 4]

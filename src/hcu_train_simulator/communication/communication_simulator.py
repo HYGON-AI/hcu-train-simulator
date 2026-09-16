@@ -11,6 +11,12 @@ import os
 import re
 from typing import List, Dict, Tuple
 
+try:
+    # python version >= 3.11
+    from importlib.resources.abc import Traversable
+except ImportError:
+    from importlib.abc import Traversable
+
 
 logger = get_logger(__name__)
 
@@ -18,10 +24,19 @@ logger = get_logger(__name__)
 class BandwidthLookup:
     """带宽查找表管理器 - 支持多操作、多GPU数量的表格式"""
 
+    MAX_MEASURED_NODES = 2
+
     def __init__(self, lookup_dir: str):
         self.lookup_dir = lookup_dir
         # 缓存结构: {(gpu_model, num_nodes, com_type, nranks): [(size, bandwidth), ...]}
         self.cache: Dict[Tuple[str, int, str, int], List[Tuple[int, float]]] = {}
+        self._warned_fallbacks = set()
+
+    def _warn_once(self, key, message, *args):
+        if key in self._warned_fallbacks:
+            return
+        self._warned_fallbacks.add(key)
+        logger.warning(message, *args)
 
     @staticmethod
     def _normalize_gpu_model(gpu_model) -> str:
@@ -86,7 +101,6 @@ class BandwidthLookup:
 
     def _load_table(self, gpu_model: str, num_nodes: int) -> Dict[Tuple[str, int], List[Tuple[int, float]]]:
         """加载指定GPU和节点数的完整表"""
-        if num_nodes > 2: num_nodes = 2
         filename = self._get_table_filename(gpu_model, num_nodes)
         # filepath = os.path.join(self.lookup_dir, filename)
         filepath = self.lookup_dir.joinpath(filename)
@@ -95,7 +109,7 @@ class BandwidthLookup:
         return self._parse_table_file(filepath)
 
     def get_bandwidth(self, gpu_model: str, num_nodes: int, com_type: CommType,
-                      size: int, nranks: int) -> float:
+                      size: int, nranks: int, group_info=None) -> float:
         """
         获取带宽
         :param gpu_model: GPU型号字符串，例如 "bw500SM"
@@ -119,19 +133,101 @@ class BandwidthLookup:
             # 如果不支持的操作，直接报错
             raise RuntimeError(f"Unsupported communication operation: '{op_str}'.")
 
-        key = (op_str, nranks)
-        table = self._load_table(gpu_model, num_nodes)
-        if key not in table:
-            # 如果没有对应操作或GPU数量的数据，尝试使用最接近的nranks
-            # 例如找小于当前nranks的最大值
-            available_nranks = [k[1] for k in table.keys() if k[0] == op_str]
-            if available_nranks:
-                available_nranks.sort()
-                # 选择最接近且不大于当前nranks的值，如果没有则选最小
-                closest = min(available_nranks, key=lambda x: abs(x - nranks))
-                key = (op_str, closest)
-            else:
-                raise RuntimeError(f"Unsupported communication operation: '{op_str}'.")
+        actual_nodes = num_nodes
+        table_nodes = min(num_nodes, self.MAX_MEASURED_NODES)
+        lookup_nranks = nranks
+        table = self._load_table(gpu_model, table_nodes)
+        available_nranks = sorted(k[1] for k in table.keys() if k[0] == op_str)
+        if not available_nranks:
+            raise RuntimeError(f"Unsupported communication operation: '{op_str}'.")
+
+        if lookup_nranks in available_nranks:
+            selected_nranks = lookup_nranks
+        else:
+            selected_nranks = min(
+                available_nranks,
+                key=lambda candidate: (abs(candidate - lookup_nranks), candidate),
+            )
+            self._warn_once(
+                ("rank-fallback", gpu_model, table_nodes, op_str, lookup_nranks, selected_nranks),
+                "Bandwidth table rank fallback: operation=%s requested_concurrency_ranks=%s "
+                "available_columns=%s; using %s-rank column from %s_%s.txt. This is an "
+                "extrapolation, not an equivalent measurement.",
+                op_str,
+                lookup_nranks,
+                available_nranks,
+                selected_nranks,
+                self._normalize_gpu_model(gpu_model),
+                table_nodes,
+            )
+
+        if actual_nodes > self.MAX_MEASURED_NODES:
+            self._warn_once(
+                ("node-fallback", gpu_model, op_str, actual_nodes, table_nodes),
+                "Bandwidth table node fallback: operation=%s actual_group_nodes=%s exceeds "
+                "measured maximum=%s; using dual-node table %s_%s.txt. The dual-node result "
+                "is treated as the best measured estimate, but fabric contention and scaling "
+                "beyond two nodes are not represented.",
+                op_str,
+                actual_nodes,
+                self.MAX_MEASURED_NODES,
+                self._normalize_gpu_model(gpu_model),
+                table_nodes,
+            )
+
+        if com_type == CommType.P2P:
+            self._warn_once(
+                ("p2p-concurrency", gpu_model, actual_nodes, nranks, table_nodes, selected_nranks),
+                "P2P bandwidth-table convention: sendrecv uses configured "
+                "concurrency_ranks=%s (an isolated sender/receiver pair is 2), independent of "
+                "pp_size=%s. "
+                "Actual PP group topology is %s ranks across %s nodes (%.2f ranks/node); selected "
+                "measurement is %s_%s.txt, sendrecv %s-rank column (%.2f ranks/node if uniform). "
+                "This models one transfer and does not model simultaneous contention among all "
+                "PP stage boundaries.",
+                lookup_nranks,
+                nranks,
+                group_info.n_ranks if group_info is not None else nranks,
+                actual_nodes,
+                (group_info.n_ranks if group_info is not None else nranks) / actual_nodes,
+                self._normalize_gpu_model(gpu_model),
+                table_nodes,
+                selected_nranks,
+                selected_nranks / table_nodes,
+            )
+        elif group_info is not None:
+            actual_ranks_per_node = group_info.n_ranks / group_info.n_nodes
+            measured_ranks_per_node = selected_nranks / table_nodes
+            if (
+                group_info.n_nodes != table_nodes
+                or abs(actual_ranks_per_node - measured_ranks_per_node) > 1e-9
+            ):
+                self._warn_once(
+                    (
+                        "topology-mismatch",
+                        gpu_model,
+                        op_str,
+                        group_info.n_nodes,
+                        group_info.n_ranks,
+                        table_nodes,
+                        selected_nranks,
+                    ),
+                    "Bandwidth table topology mismatch: operation=%s actual_group=%s ranks "
+                    "across %s nodes (%.2f ranks/node), but selected measurement=%s_%s.txt "
+                    "%s-rank column (%.2f ranks/node if uniform). Equal total rank count does "
+                    "not make these layouts equivalent; the lookup cannot model this topology "
+                    "exactly and uses the selected measured bandwidth as an approximation.",
+                    op_str,
+                    group_info.n_ranks,
+                    group_info.n_nodes,
+                    actual_ranks_per_node,
+                    self._normalize_gpu_model(gpu_model),
+                    table_nodes,
+                    selected_nranks,
+                    measured_ranks_per_node,
+                )
+
+        key = (op_str, selected_nranks)
 
         data = table[key]
         return self._lookup_bandwidth(size, data)
@@ -165,18 +261,29 @@ class CommunicationEngine:
                  intra_node_bandwidth_gbps: float,
                  inter_node_bandwidth_gbps: float,
                  bandwidth_table_dir: str = None,
-                 gpu_model: str = None):
+                 gpu_model: str = None,
+                 p2p_intra_efficiency: float = 1.0,
+                 collective_intra_efficiency: float = 1.0,
+                 collective_inter_efficiency: float = 1.0):
         self.topology = topology
         self.group_manager = GroupManager(topology)
         self.algorithms: Dict[CommType, object] = {}
         self._configured = False
         self.intra_node_bandwidth_gbps = intra_node_bandwidth_gbps
         self.inter_node_bandwidth_gbps = inter_node_bandwidth_gbps
+        self.p2p_intra_efficiency = p2p_intra_efficiency
+        self.collective_intra_efficiency = collective_intra_efficiency
+        self.collective_inter_efficiency = collective_inter_efficiency
         self.bandwidth_lookup = None
         if bandwidth_table_dir and gpu_model:
             self.bandwidth_lookup = BandwidthLookup(bandwidth_table_dir)
             self.gpu_model = gpu_model
             self.num_nodes = topology.num_nodes
+        elif intra_node_bandwidth_gbps <= 0 or inter_node_bandwidth_gbps <= 0:
+            raise ValueError(
+                "intra_node_bandwidth_gbps and inter_node_bandwidth_gbps must "
+                "be positive when no bandwidth table is configured"
+            )
 
     def configure_parallelism(self, tp_size: int = 1, cp_size: int = 1, dp_size: int = 1,
                               pp_size: int = 1, ep_size: int = 1, etp_size: int = 1, edp_size: int = 1):
@@ -226,6 +333,14 @@ class CommunicationEngine:
     def get_group_info(self, rank: int, group_type: GroupType):
         return self.group_manager.get_group_info(rank, group_type)
 
+    def get_effective_bandwidth(self, flow: SingleFlow, com_type: CommType) -> float:
+        """Return effective one-direction bandwidth for a flow in GB/s."""
+        if flow.tag in ["PXN", "PXN_INIT", "NVLS"]:
+            return self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
+        if com_type == CommType.P2P:
+            return self.intra_node_bandwidth_gbps * self.p2p_intra_efficiency
+        return self.intra_node_bandwidth_gbps * self.collective_intra_efficiency
+
     def simulate_communication_time(self, flows: List[SingleFlow], com_type: CommType = None, nranks: int = None,
                                     data_size: int = None, group_info=None) -> float:
         """
@@ -243,46 +358,50 @@ class CommunicationEngine:
             return 0.0
 
         total_time = 0.0
-        # 尝试推断通信组大小（从流中获取src/dest的最大rank范围？简单方法：从第一个流中获取通信组大小？）
-        # 更可靠的方式：由调用者传入nranks，或者在生成流时记录在flow_models中。
-        # 这里简单起见，如果未提供nranks，则从flows中统计唯一rank数量作为近似
         if nranks is None and flows:
             ranks = set()
             for f in flows:
                 ranks.add(f.src)
                 ranks.add(f.dest)
             nranks = len(ranks)
-        for flow in flows:
-            if self.bandwidth_lookup and com_type is not None:
-                # 获取当前通信组实际跨越的节点数
-                if group_info is not None:
-                    num_nodes_for_group = group_info.n_nodes
-                else:
-                    # 兼容旧调用：从flow中推断节点数（通过rank和每节点GPU数）
-                    gpus_per_node = self.topology.num_gpus // self.topology.num_nodes
-                    src_node = flow.src // gpus_per_node
-                    dst_node = flow.dest // gpus_per_node
-                    num_nodes_for_group = len(set([src_node, dst_node]))
-                # 使用带宽表
-                bandwidth = self.bandwidth_lookup.get_bandwidth(
-                    self.gpu_model, num_nodes_for_group, com_type, data_size, nranks
-                )
-                total_time = data_size / 1024 / 1024 / 1024 / bandwidth
-                return total_time
+
+        if self.bandwidth_lookup and com_type is not None:
+            # Table entries are measured end-to-end operation bandwidths and
+            # already include real-world efficiency losses.
+            if group_info is not None:
+                num_nodes_for_group = group_info.n_nodes
             else:
-                # 使用固定带宽
-                if flow.tag in ["PXN", "PXN_INIT", "NVLS"]:
-                    bandwidth = self.inter_node_bandwidth_gbps
-                else:
-                    bandwidth = self.intra_node_bandwidth_gbps
-            data_size_gb = flow.size / (1024 * 1024 * 1024)
-            transfer_time = data_size_gb / bandwidth if bandwidth > 0 else 0
+                gpus_per_node = self.topology.num_gpus // self.topology.num_nodes
+                nodes = {
+                    flow_rank // gpus_per_node
+                    for flow in flows
+                    for flow_rank in (flow.src, flow.dest)
+                }
+                num_nodes_for_group = len(nodes)
+            bandwidth = self.bandwidth_lookup.get_bandwidth(
+                self.gpu_model,
+                num_nodes_for_group,
+                com_type,
+                data_size,
+                nranks,
+                group_info=group_info,
+            )
+            if bandwidth <= 0:
+                raise ValueError("bandwidth table returned a non-positive bandwidth")
+            return data_size / 1_000_000_000 / bandwidth
+
+        for flow in flows:
+            bandwidth = self.get_effective_bandwidth(flow, com_type)
+            if bandwidth <= 0:
+                raise ValueError("effective communication bandwidth must be positive")
+            data_size_gb = flow.size / 1_000_000_000
+            transfer_time = data_size_gb / bandwidth
             total_time += transfer_time
         return total_time
 
-    def get_flow_details(self, flows: List[SingleFlow]) -> Dict:
+    def get_flow_details(self, flows: List[SingleFlow], com_type: CommType = None) -> Dict:
         total_data = sum(flow.size for flow in flows)
-        total_data_gb = total_data / (1024 * 1024 * 1024)
+        total_data_gb = total_data / 1_000_000_000
         tag_stats = {}
         for flow in flows:
             tag = flow.tag
@@ -290,7 +409,7 @@ class CommunicationEngine:
                 tag_stats[tag] = {'count': 0, 'total_size_bytes': 0, 'total_size_gb': 0}
             tag_stats[tag]['count'] += 1
             tag_stats[tag]['total_size_bytes'] += flow.size
-            tag_stats[tag]['total_size_gb'] = tag_stats[tag]['total_size_bytes'] / (1024 * 1024 * 1024)
+            tag_stats[tag]['total_size_gb'] = tag_stats[tag]['total_size_bytes'] / 1_000_000_000
         pair_stats = {}
         for flow in flows:
             pair = (flow.src, flow.dest)
@@ -298,14 +417,22 @@ class CommunicationEngine:
                 pair_stats[pair] = {'count': 0, 'total_size_bytes': 0, 'total_size_gb': 0}
             pair_stats[pair]['count'] += 1
             pair_stats[pair]['total_size_bytes'] += flow.size
-            pair_stats[pair]['total_size_gb'] = pair_stats[pair]['total_size_bytes'] / (1024 * 1024 * 1024)
+            pair_stats[pair]['total_size_gb'] = pair_stats[pair]['total_size_bytes'] / 1_000_000_000
         tag_time_stats = {}
         for tag, stats in tag_stats.items():
-            if tag in ["PXN", "PXN_INIT", "NVLS"]:
-                bandwidth = 800.0
-            else:
-                bandwidth = 400.0
-            transfer_time = stats['total_size_gb'] / bandwidth if bandwidth > 0 else 0
+            representative = next(flow for flow in flows if flow.tag == tag)
+            bandwidth = (
+                None
+                if self.bandwidth_lookup
+                else self.get_effective_bandwidth(
+                    representative, com_type or CommType.ALL_REDUCE
+                )
+            )
+            transfer_time = (
+                stats['total_size_gb'] / bandwidth
+                if bandwidth is not None and bandwidth > 0
+                else None
+            )
             tag_time_stats[tag] = {
                 'bandwidth_gbps': bandwidth,
                 'theoretical_time_sec': transfer_time
@@ -341,7 +468,10 @@ class CommunicationSimulator:
                          gpu_model: str = "bw500SM",  # 改为字符串，用于匹配文件名
                          intra_node_bandwidth_gbps: float = 800.0,
                          inter_node_bandwidth_gbps: float = 400.0,
-                         bandwidth_table_dir: str = None):
+                         p2p_intra_efficiency: float = 1.0,
+                         collective_intra_efficiency: float = 1.0,
+                         collective_inter_efficiency: float = 1.0,
+                         bandwidth_table_dir: Traversable = None):
         """
         初始化并行配置
         :param gpu_model: GPU型号字符串，如 "bw500SM"，将用于查找表文件名
@@ -364,7 +494,10 @@ class CommunicationSimulator:
             intra_node_bandwidth_gbps,
             inter_node_bandwidth_gbps,
             bandwidth_table_dir=bandwidth_table_dir,
-            gpu_model=gpu_model
+            gpu_model=gpu_model,
+            p2p_intra_efficiency=p2p_intra_efficiency,
+            collective_intra_efficiency=collective_intra_efficiency,
+            collective_inter_efficiency=collective_inter_efficiency,
         )
         dp_size = num_gpus // (tp_size * cp_size * pp_size)
         if dp_size == 0:
@@ -409,21 +542,54 @@ class CommunicationSimulator:
         if not self._initialized:
             raise RuntimeError("Must call initialize_parallelism() first")
         self.engine.set_algorithm(com_type, algorithm)
-        flows = self.engine.get_communication_flows(rank, com_type, data_size, group_type)
-        if not flows:
+        group_info = self.engine.get_group_info(rank, group_type)
+        if group_info is None:
             logger.warning("no flows generated for %s on %s", com_type.value, group_type.value)
             return 0.0
-        # 获取通信组大小
-        group_info = self.engine.get_group_info(rank, group_type)
-        nranks = group_info.n_ranks if group_info else 0
-        total_time = self.engine.simulate_communication_time(
-            flows,
-            com_type=com_type,
-            nranks=nranks,
-            data_size=data_size,
-            group_info=group_info,
+        flow_graph = self.engine.algorithms[com_type].decompose(
+            rank, group_info, com_type, data_size
         )
-        return total_time
+        if not flow_graph.flows:
+            logger.warning("no flows generated for %s on %s", com_type.value, group_type.value)
+            return 0.0
+
+        if self.engine.bandwidth_lookup:
+            # The table represents the measured end-to-end collective, so one
+            # lookup is sufficient and per-rank flow critical paths do not apply.
+            flows = (
+                flow_graph.get_by_rank_p2p(rank)
+                if group_type == GroupType.PP
+                else flow_graph.get_by_rank(rank)
+            )
+            return self.engine.simulate_communication_time(
+                flows, com_type, group_info.n_ranks, data_size, group_info
+            )
+
+        if group_type == GroupType.PP:
+            # Preserve the legacy PP accounting requested by the estimator:
+            # sum every generated forward/backward stage-boundary flow.
+            flow_times = [
+                self.engine.simulate_communication_time(
+                    [flow], com_type, group_info.n_ranks, data_size, group_info
+                )
+                for flow in flow_graph.get_by_rank_p2p(rank)
+            ]
+            # return sum(flow_times)
+            return sum(flow_times) / len(flow_times)
+
+        # Collective ranks and links operate concurrently. Completion time is
+        # determined by the slowest rank path, not by an arbitrary rank.
+        rank_times = [
+            self.engine.simulate_communication_time(
+                flow_graph.get_by_rank(group_rank),
+                com_type,
+                group_info.n_ranks,
+                data_size,
+                group_info,
+            )
+            for group_rank in group_info.ranks
+        ]
+        return max(rank_times, default=0.0)
 
     def get_communication_details(self,
                                   com_type: CommType,
@@ -440,14 +606,14 @@ class CommunicationSimulator:
                     'tag_stats': {}, 'tag_time_stats': {}}
         group_info = self.engine.get_group_info(rank, group_type)
         nranks = group_info.n_ranks if group_info else 0
-        total_time = self.engine.simulate_communication_time(
-            flows,
+        total_time = self.get_communication_time(
             com_type=com_type,
-            nranks=nranks,
+            algorithm=algorithm,
+            group_type=group_type,
             data_size=data_size,
-            group_info=group_info,
+            rank=rank,
         )
-        details = self.engine.get_flow_details(flows)
+        details = self.engine.get_flow_details(flows, com_type)
         return {
             'total_time': total_time,
             'total_flows': details['total_flows'],

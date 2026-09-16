@@ -300,6 +300,11 @@ class ParallelConfig:
     overlap_p2p_comm: bool = False
     ep_communication_backend: str = "alltoall"
 
+    # fp8 training
+    # switch only the explicitly modeled fp8 training compute/communication paths.
+    # memory and benchmark estimators remain unchanged.
+    use_fp8_training: bool = False
+
     # derived field
     dp_size: int = field(init=False)
     # vp_size: int = field(init=False)
@@ -343,6 +348,7 @@ class HardwareConfig:
     collective_inter_efficiency: float
     non_gemm_efficiency: float = 0.08
     optimizer_efficiency: float = 0.04
+    use_bandwidth_table: bool = True
 
     @classmethod
     def from_dict(cls, config):

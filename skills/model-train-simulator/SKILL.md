@@ -69,6 +69,7 @@ parallel_config:
   pp_overlap_ratio: 0
 
 hardware_config:
+  use_bandwidth_table: true
   fp16_tflops: 480
   fp8_tflops: 960
   gpus_per_node: 8

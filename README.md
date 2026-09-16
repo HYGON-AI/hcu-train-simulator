@@ -11,6 +11,7 @@
 - **通信时间模拟**：按 TP、CP、DP、PP 通信域统计通信耗时；MoE 模型额外统计 EP、ETP 通信耗时。通信模型会结合节点内/节点间带宽、通信类型、并行拓扑以及通信掩盖比例进行估算。
 - **端到端训练模拟**：汇总显存、计算、通信结果，输出模型规模、计算时间、通信时间、单迭代总时间、TGS（tokens/p/s）、MFU 和通信占比等关键指标。
 - **最优性能网格搜索**：根据 `search.candidates` 中配置的并行策略和 micro batch 候选组合进行网格搜索，默认按最高 TGS 排序，过滤超过显存上限的组合，并在终端输出 Top 10 结果。
+- **训练配置求解**：给定现有 YAML 与模型 `config.json`，自动给出带 5 GiB 安全余量的最小卡数方案和相对高性能方案，只输出精简终端结果。
 - **报告生成**：`run` 模式会在当前目录下生成 `training_report/training_report_<timestamp>.html`，报告中包含关键指标卡片、各 PP stage 显存、计算明细以及通信域耗时分布。
 
 估算原理概览：
@@ -51,95 +52,77 @@ src/hcu_train_simulator/
 |:----------:|:---:|:--------:|
 | model_path |  /  | 模型配置文件路径 |
 
-`model_path` reads a HuggingFace-style `config.json`. In addition to dense and
-standard MoE fields, the simulator now recognizes these architecture fields:
-`padded_vocab_size`, `make_vocab_size_divisible_by`, `vocab_size_multiple`,
-`num_experts`/`n_routed_experts`, `num_experts_per_tok`/`topk`,
-`num_shared_experts`/`n_shared_experts`, `shared_expert_intermediate_size`,
-MLA fields `q_lora_rank`, `kv_lora_rank`, `qk_nope_head_dim`,
-`qk_rope_head_dim`, `v_head_dim`, and MTP fields `mtp_num_layers`,
-`num_mtp_layers`, `num_nextn_predict_layers`.GLM-5 DSA configs additionally
-use `index_n_heads`, `index_head_dim`, `index_topk`, and optional per-layer
-`indexer_types` (`full` or `shared`).
+`model_path` 用于读取 HuggingFace 格式的 `config.json`，既可以直接指向配置文件，也可以指向包含该文件的模型目录。工具支持 Dense 模型和标准 MoE 模型；对于自定义模型，也可以基于现有开源模型配置修改后传入。
 
-GLM-5 (`model_type: glm_moe_dsa`) is modeled as MLA + DeepSeek Sparse
-Attention + dense/MoE FFN + MTP. The compute breakdown includes the replicated
-lightning-indexer Q/K/head-weight projections, index score matmul, key
-LayerNorm, indexer RoPE, score reduction, token top-k, and the `O(L * topk)`
-sparse MLA kernel. Parameter and activation estimates include indexer weights,
-saved top-k indices, and the fused index-score workspace. Following the public
-GLM-5/DeepSeek implementation, indexer weights and indexer compute are treated
-as replicated across TP ranks; no extra TP collective is charged for them.
-`indexer_types` can describe IndexShare-style layers that reuse a previous full
-indexer's top-k selection.
+除常见的 Dense 和 MoE 配置字段外，模拟器还支持以下架构字段：词表填充字段 `padded_vocab_size`、`make_vocab_size_divisible_by`、`vocab_size_multiple`；MoE 字段 `num_experts`/`n_routed_experts`、`num_experts_per_tok`/`topk`、`num_shared_experts`/`n_shared_experts`、`shared_expert_intermediate_size`；MLA 字段 `q_lora_rank`、`kv_lora_rank`、`qk_nope_head_dim`、`qk_rope_head_dim`、`v_head_dim`；以及 MTP 字段 `mtp_num_layers`、`num_mtp_layers`、`num_nextn_predict_layers`。GLM-5 DSA 配置还支持 `index_n_heads`、`index_head_dim`、`index_topk`，并可通过逐层配置 `indexer_types` 指定 `full` 或 `shared` 类型。
 
-Qwen3.5 VLM checkpoints are accepted directly in their nested HuggingFace form
-(`text_config` + `vision_config`). The resolved Megatron-style spec models the
-3:1 Gated DeltaNet / gated-softmax-attention layer pattern, partial mRoPE,
-attention output gates, MTP, dense or MoE FFNs (including the shared-expert
-gate), the vision patch encoder, all vision Transformer blocks, and the patch
-merger. `parallel_config.vision_seq_length` controls visual patch tokens per
-image; when it is `null`, `vision_config.num_position_embeddings` is used.
-`parallel_config.vision_num_images` defaults to `1`.
+GLM-5（`model_type: glm_moe_dsa`）按 MLA、DeepSeek 稀疏注意力、Dense/MoE FFN 和 MTP 进行建模。计算明细包括多副本闪电索引器的 Q/K/头权重投影、索引分数矩阵乘法、键向量 LayerNorm、索引器 RoPE、分数归约、词元 top-k，以及复杂度为 `O(L * topk)` 的稀疏 MLA 内核。参数和激活估算包括索引器权重、保存的 top-k 索引和融合索引分数工作区。按照公开的 GLM-5/DeepSeek 实现，索引器权重和计算在各 TP 进程上按复制方式处理，不额外计入 TP 集合通信。`indexer_types` 可用于描述 IndexShare 风格的层，使其复用前一个 `full` 索引器的 top-k 选择结果。
 
-Qwen3-VL dense and MoE checkpoints are also accepted directly in nested
-HuggingFace form. The adapter recognizes `qwen3_vl` / `qwen3_vl_moe`, QK Norm,
-mRoPE metadata, `decoder_sparse_step`, `mlp_only_layers`, the ViT patch encoder,
-all visual Transformer blocks, the primary patch merger, and every DeepStack
-merger listed by `vision_config.deepstack_visual_indexes`. The DeepStack
-parameters, activations, merger compute, and language-model feature additions
-are included in the estimates. A runnable Qwen3-VL-30B-A3B example is provided
-at `examples/qwen3_vl_30b_a3b/simulation.yaml`.
+Qwen3.5 VLM 检查点可直接使用 HuggingFace 的嵌套配置格式（`text_config` + `vision_config`）。解析后的 Megatron 风格模型规格支持 3:1 的 Gated DeltaNet/门控 softmax 注意力层模式、部分 mRoPE、注意力输出门控、MTP、Dense 或 MoE FFN（包括共享专家门控）、视觉图像块编码器、全部视觉 Transformer 层以及图像块合并器。`parallel_config.vision_seq_length` 控制每张图片的视觉图像块词元数；当其值为 `null` 时，使用 `vision_config.num_position_embeddings`。`parallel_config.vision_num_images` 的默认值为 `1`。
 
-支持 HuggingFace 格式的 `config.json` 文件，`model_path` 可以指向 `config.json` 文件，也可以指向包含 `config.json` 的模型目录。如果是自定义模型，可基于现有开源模型配置修改后传入。dense 模型和包含专家参数的 MoE 模型均可进行模拟。
+Qwen3-VL 的 Dense 和 MoE 检查点同样可直接使用 HuggingFace 嵌套配置。适配器支持 `qwen3_vl`/`qwen3_vl_moe`、QK 归一化、mRoPE 元数据、`decoder_sparse_step`、`mlp_only_layers`、ViT 图像块编码器、全部视觉 Transformer 层、主图像块合并器，以及 `vision_config.deepstack_visual_indexes` 中列出的所有 DeepStack 合并器。估算会计入 DeepStack 参数、激活、合并器计算，以及添加到语言模型的特征。可运行的 Qwen3-VL-30B-A3B 示例位于 `examples/qwen3_vl_30b_a3b/simulation.yaml`。
 
 ### 2.2 训练参数配置
 
 
-|                参数名                |  默认值  |            参数说明            |
-|:---------------------------------:|:-----:|:--------------------------:|
-|              tp_size              |   1   |            张量并行            |
-|              cp_size              |   1   |           上下文并行            |
-|              ep_size              |   1   |            专家并行            |
-|             etp_size              | null  |          专家域张量并行           |
-|              pp_size              |   1   |            流水并行            |
-|            pp_schedule            | 1f1b  | 流水调度方式，支持 `1f1b`、`interleaved`、`interleaved_1f1b` |
-|      num_layers_per_vp_stage      | null  |   每个虚拟流水线的transformer层数    |
-|     use_distributed_optimizer     | True  |          使用分布式优化器          |
-| decoder_first_pipeline_num_layers | null  | 第一个pp stage的transformer层数  |
-| decoder_last_pipeline_num_layers  | null  | 最后一个pp stage的transformer层数 |
-|          full_recompute           | False |         是否开启全量重计算          |
-|         micro_batch_size          |   1   |       每个模型实例的局部微批次大小       |
-|         global_batch_size         |  256  |          全局训练批次大小          |
-|            seq_length             | 4096  |         待处理的最大序列长度         |
-|             num_gpus              |   8   |         训练使用的GPU数量         |
-|          overlap_mode             | auto  | 通信掩盖模式，支持 `auto`、`manual`、`none` |
-|       ep_overlap_enabled          | false | `auto` 模式下是否允许 EP dispatch/combine 被专家计算掩盖 |
-|    ep_communication_backend       | alltoall | EP 通信后端，支持 `alltoall` 和内置启发式 `deepep` 四阶段模型 |
-|         tp_overlap_ratio          |   0   | `manual` 模式下的 TP 域通信掩盖比例 |
-|         cp_overlap_ratio          |   0   | `manual` 模式下的 CP 域通信掩盖比例 |
-|         dp_overlap_ratio          |   0   | `manual` 模式下的 DP 域通信掩盖比例 |
-|         ep_overlap_ratio          |   0   | `manual` 模式下的 EP 域通信掩盖比例 |
-|         pp_overlap_ratio          |   0   | `manual` 模式下的 PP 域通信掩盖比例 |
+|                参数名                |  默认值  |                                                              参数说明                                                              |
+|:---------------------------------:|:-----:|:----------------------------------------------------------------------------------------------------------------------------------:|
+|              tp_size              |   1   |                                                              张量并行                                                              |
+|              cp_size              |   1   |                                                             上下文并行                                                             |
+|              ep_size              |   1   |                                                              专家并行                                                              |
+|             etp_size              | null  |                                                           专家域张量并行                                                           |
+|              pp_size              |   1   |                                                              流水并行                                                              |
+|            pp_schedule            | 1f1b  |                                    流水调度方式，支持 `1f1b`、`interleaved`、`interleaved_1f1b`                                    |
+|      num_layers_per_vp_stage      | null  |                               每个虚拟流水线 stage 的 Transformer 层数；VP size 由层数和 PP 自动推导                               |
+|     use_distributed_optimizer     | True  |                                                          使用分布式优化器                                                          |
+| decoder_first_pipeline_num_layers | null  |                                                  第一个pp stage的transformer层数                                                   |
+| decoder_last_pipeline_num_layers  | null  |                                                 最后一个pp stage的transformer层数                                                  |
+|          full_recompute           | False |                                                         是否开启全量重计算                                                         |
+|        use_fp8_training           | False | 【仅为实验特性】理论计算中为 attention QKV/proj、Flash Attention、路由专家 FC1/FC2 使用 FP8 算力，并将 TP/ETP/EP 通信按 1 字节计算 |
+|         micro_batch_size          |   1   |                                                    每个模型实例的局部微批次大小                                                    |
+|         global_batch_size         |  256  |                                                          全局训练批次大小                                                          |
+|            seq_length             | 4096  |                                                        待处理的最大序列长度                                                        |
+|             num_gpus              |   8   |                                                         训练使用的GPU数量                                                          |
+|          overlap_mode             | auto  |                                            通信掩盖模式，支持 `auto`、`manual`、`none`                                             |
+|       ep_overlap_enabled          | false |                         `auto` 模式下是否允许 EP dispatch/combine 被专家计算掩盖；要求启用 interleaved VPP                         |
+|       overlap_p2p_comm            | false |                                             是否启用 interleaved VP 的 PP P2P 通信掩盖                                             |
+|    ep_communication_backend       | alltoall |                                   EP 通信后端，支持 `alltoall` 和内置启发式 `deepep` 四阶段模型                                    |
+|         tp_overlap_ratio          |   0   |                                                `manual` 模式下的 TP 域通信掩盖比例                                                 |
+|         cp_overlap_ratio          |   0   |                                                `manual` 模式下的 CP 域通信掩盖比例                                                 |
+|         dp_overlap_ratio          |   0   |                                                `manual` 模式下的 DP 域通信掩盖比例                                                 |
+|         ep_overlap_ratio          |   0   |                                                `manual` 模式下的 EP 域通信掩盖比例                                                 |
+|         pp_overlap_ratio          | null  |                           `manual` 模式下的 PP 域通信掩盖比例；P2P overlap 开启且为 null 时使用自动模型                            |
 
 根据需要模拟的训练配置来填写训练参数。`decoder_first_pipeline_num_layers` 和 `decoder_last_pipeline_num_layers` 用于描述首尾 PP stage 的自定义层数，会影响 PP stage 显存、通信和调度气泡等估算。
 
+网格搜索可直接在 `search.candidates` 中加入 `num_layers_per_vp_stage`，例如
+`[null, 1, 2, 4]`。未配置该候选维度时，搜索器会根据层数和 PP 自动生成合法
+VPP 候选。非空候选自动使用 `interleaved_1f1b` 并启用 P2P overlap；对 MoE
+模型还会自动启用 EP overlap。若需比较关闭 EP overlap 的 VPP，可在候选中显式
+加入 `ep_overlap_enabled: [false, true]`。`vp_size` 仅由模型层数、PP 和每个
+虚拟 stage 的层数推导，不是独立搜索参数。
+
 ### 2.3 硬件参数配置
 
-|            参数名             | 默认值 |    参数说明    |
-|:--------------------------:|:---:|:----------:|
-|       fp16_tflops       | 480 | FP16峰值算力（TFLOPS） |
-|       fp8_tflops        | 960 | FP8峰值算力（TFLOPS） |
-|      gpus_per_node      |  8  | 单节点GPU卡数 |
-|         hbm_gib         | 64  | 单卡HBM容量（GiB） |
-|      intra_bw_gbps      | 448 | 节点内互联带宽（GB/s） |
-|      inter_bw_gbps      | 128 | 节点间互联带宽（GB/s） |
-|    gemm_efficiency      | 0.4 | GEMM计算效率 |
-|    non_gemm_efficiency  | 0.08 | 非 GEMM vector/elementwise 计算效率 |
-|    optimizer_efficiency | 0.04 | Optimizer step 计算效率 |
-| p2p_intra_efficiency    | 0.8 | 节点内P2P通信效率 |
-| collective_intra_efficiency | 0.7 | 节点内集合通信效率 |
-| collective_inter_efficiency | 0.8 | 节点间集合通信效率 |
+|           参数名            | 默认值 |              参数说明               |
+|:---------------------------:|:------:|:-----------------------------------:|
+|         fp16_tflops         |  480   |       FP16峰值算力（TFLOPS）        |
+|         fp8_tflops          |  960   |        FP8峰值算力（TFLOPS）        |
+|        gpus_per_node        |   8    |            单节点GPU卡数            |
+|           hbm_gib           |   64   |         单卡HBM容量（GiB）          |
+|       use_bandwidth_table   |  true  |      是否使用内置实测通信带宽       |
+|        intra_bw_gbps        |  224   |   单卡节点内单向聚合带宽（GB/s）    |
+|        inter_bw_gbps        |   64   |   单卡节点间单向聚合带宽（GB/s）    |
+|       gemm_efficiency       |  0.4   |            GEMM计算效率             |
+|     non_gemm_efficiency     |  0.08  | 非 GEMM vector/elementwise 计算效率 |
+|    optimizer_efficiency     |  0.04  |       Optimizer step 计算效率       |
+|    p2p_intra_efficiency     |  0.8   |          节点内P2P通信效率          |
+| collective_intra_efficiency |  0.7   |         节点内集合通信效率          |
+| collective_inter_efficiency |  0.8   |         节点间集合通信效率          |
+
+`use_bandwidth_table=true` 时直接使用内置实测有效带宽，不再重复应用通信效率参数。
+设置为 `false` 时，`intra_bw_gbps` 和 `inter_bw_gbps` 按单卡单向聚合峰值带宽（十进制 GB/s）解释，
+实际计算带宽为峰值带宽乘对应效率；跨节点 P2P 使用现有的 `collective_inter_efficiency`。
 
 ### 2.4 搜索参数配置
 
@@ -150,7 +133,7 @@ at `examples/qwen3_vl_30b_a3b/simulation.yaml`.
 | enabled | true | 是否允许执行 `hcu-train-sim search config.yaml` |
 | top_k | 10 | 终端输出的结果数量，当前最多保留 Top 10 |
 | memory_margin_gib | 5 | 显存安全余量，候选组合的峰值显存不能超过 `hbm_gib - memory_margin_gib` |
-| candidates | / | 网格搜索候选空间，目前支持 `tp_size`、`cp_size`、`pp_size`、`ep_size`、`etp_size`、`micro_batch_size` 等并行和批次参数 |
+| candidates | / | 网格搜索候选空间，支持 `tp_size`、`cp_size`、`pp_size`、`ep_size`、`etp_size`、`num_layers_per_vp_stage`、`micro_batch_size` 等并行和批次参数 |
 
 示例：
 
@@ -165,6 +148,7 @@ search:
     pp_size: [1, 2, 4, 8]
     ep_size: [1, 2, 4, 8]
     etp_size: [1, 2, 4]
+    num_layers_per_vp_stage: [null, 1, 2, 4]
     micro_batch_size: [1, 2, 4]
 ```
 
@@ -243,7 +227,24 @@ hcu-train-sim search config.yaml
 
 执行上述命令后，会读取 `config.yaml` 中的 `search.candidates` 生成候选组合，对每个有效组合执行显存、计算和通信估算，并按 TGS 从高到低输出最多 10 条结果。超过 `hbm_gib - memory_margin_gib` 的组合会被过滤；无效并行组合（例如 GPU 数量不能整除并行维度、TP 不能整除 KV Head、PP 不能整除层数等）会被跳过。
 
-#### 3.2.6 算子性能 Profile
+#### 3.2.6 自动求解训练配置
+
+`solve` 复用同一个 `config.yaml` 中的 `model_path`、`hardware_config` 和训练选项，
+不需要额外维护一份 YAML：
+
+```bash
+hcu-train-sim solve config.yaml
+hcu-train-sim solve config.yaml --model-path /path/to/config.json --seq-length 8192
+```
+
+默认 `seq_length=4096`、`micro_batch_size=1`、pipeline bubble 不超过 15%，
+最小卡数和相对高性能方案均固定预留 5 GiB 显存安全余量（可通过 CLI 覆盖）。
+求解器会动态选择 GBS、TP/CP/PP/VP/DP/EP/ETP；合法 VPP 候选采用
+`interleaved_1f1b`，并在 MoE 模型上联动 EP overlap。最终分别打印最小卡数与相对高性能
+方案的并行配置、峰值显存、单步时间、MFU 和 TGS。未知模型族会降级为通用
+Transformer/MoE 规模近似，无法识别的额外字段会被忽略并在终端打印假设。
+
+#### 3.2.7 算子性能 Profile
 
 工具包含只读的内置算子 Profile，资源位于 Python 包的
 `hcu_train_simulator/profiles/builtin/` 下。`hcu-train-sim init` 只生成
@@ -277,7 +278,7 @@ GEMM 和 Flash Attention 的 validated shape 只保存 `status`、`mean_ms`、`t
 
 ## 4. 扩展新模型
 
-新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。具体接口和验收清单见 [模型插件开发指南](docs/model_plugins.md)。
+新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。
 
 
 ## License

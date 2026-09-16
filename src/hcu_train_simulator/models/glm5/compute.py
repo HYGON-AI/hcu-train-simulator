@@ -63,11 +63,12 @@ def _add_sparse_attention(model, result, spec, module_path, compute_count):
     base = model.micro_batch_size * local_seq * sparse_k * heads * dimensions
     forward_flops = 2 * base
     backward_flops = 5 * base
+    attention_tflops = model.compute_tflops(use_fp8=model.use_fp8_training)
     forward_ms = forward_flops * compute_count / (
-        model.fp16_tflops * model.gemm_efficiency
+        attention_tflops * model.gemm_efficiency
     ) / 1e9
     backward_ms = backward_flops * compute_count / (
-        model.fp16_tflops * model.gemm_efficiency * 0.5
+        attention_tflops * model.gemm_efficiency * 0.88
     ) / 1e9
     row = {
         "model_part": "dsa_sparse_attn",
