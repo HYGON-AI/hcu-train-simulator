@@ -222,10 +222,12 @@ def report_data_processing(memory_result, compute_result, comm_result):
         / config.parallel.num_gpus
         / (iter_time / 1000)
     )
+
+    actual_tflops = config.hardware.fp16_tflops if not config.parallel.use_fp8_training else config.hardware.fp8_tflops
     mfu = data_format(
         model_flops
         / (iter_time / 1000 * 1e12 * config.parallel.num_gpus)
-        / config.hardware.fp16_tflops,
+        / actual_tflops,
         4,
     )
 

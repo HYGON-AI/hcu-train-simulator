@@ -3,7 +3,11 @@
 
 from hcu_train_simulator.config import initialize_simulation
 from hcu_train_simulator.modeling import ModuleSpecMemoryModel
-from hcu_train_simulator.parallelism import build_pipeline_layer_layout, get_num_microbatches
+from hcu_train_simulator.parallelism import (
+    build_pipeline_layer_layout,
+    get_num_microbatches,
+    interleaved_peak_activation_counts,
+)
 from hcu_train_simulator.context import get_config
 from hcu_train_simulator.logging import get_logger, log_table
 
@@ -38,26 +42,7 @@ def regular_1f1b_activation_microbatches(pp_rank, pp_size, num_microbatches):
     )
 
 
-def interleaved_vpp_activation_microbatches(pp_rank, vp_rank, pp_size, vp_size, num_microbatches):
-    if pp_rank == 0:
-        num_mbs_vp_rank = pp_size * (vp_size - vp_rank)
-        return min(num_mbs_vp_rank, num_microbatches)
-
-    if vp_rank == 0:
-        num_mbs_vp_rank = pp_size + max((pp_size - pp_rank) * 2 - 1 - pp_size, 0)
-    elif vp_rank == vp_size - 1:
-        num_mbs_vp_rank = min((pp_size - pp_rank) * 2 + 1, pp_size)
-    else:
-        num_mbs_vp_rank = pp_size
-
-    return min(num_mbs_vp_rank, num_microbatches)
-
-
-def interleaved_vpp_output_microbatches(pp_rank, pp_size, num_microbatches):
-    return min((pp_size - pp_rank) * 2 + 1, num_microbatches)
-
-
-def estimate_memory(log_result=False):
+def estimate_memory(log_result=False, include_module_breakdown=True):
 
     config = get_config()
 
@@ -75,6 +60,8 @@ def estimate_memory(log_result=False):
     output_spec = config.model_spec.submodules.output_layer
     vision_spec = getattr(config.model_spec.submodules, "vision_model", None)
     mtp_spec = getattr(config.model_spec.submodules, "mtp", None)
+    parameter_cache = {}
+    activation_cache = {}
 
     report = []
     for pp_rank in range(pp_size):
@@ -83,13 +70,21 @@ def estimate_memory(log_result=False):
         saved_activation_mem = 0
         peak_workspace_mem = 0
         activation_microbatches = None
+        vp_activation_microbatches = None
         module_breakdown = []
 
         def add_spec(spec, path, activation_microbatches=0):
             nonlocal static_mem, expert_static_mem
             nonlocal saved_activation_mem, peak_workspace_mem
-            params = model.parameter_estimate(spec)
-            activations = model.activation_estimate(spec)
+            cache_key = id(spec)
+            params = parameter_cache.get(cache_key)
+            if params is None:
+                params = model.parameter_estimate(spec)
+                parameter_cache[cache_key] = params
+            activations = activation_cache.get(cache_key)
+            if activations is None:
+                activations = model.activation_estimate(spec)
+                activation_cache[cache_key] = activations
             static_mem += params.total_elements
             expert_static_mem += params.expert_elements
             saved_activation_mem += (
@@ -100,47 +95,61 @@ def estimate_memory(log_result=False):
                     peak_workspace_mem,
                     activations.workspace_elements,
                 )
-            for row in model.memory_rows(spec, path=path):
-                row = dict(row)
-                row["saved_act_elems"] = int(
-                    row["saved_act_elems"] * activation_microbatches / config.parallel.cp_size
-                )
-                row["workspace_elems"] = int(row["workspace_elems"] / config.parallel.cp_size)
-                module_breakdown.append(row)
+            if include_module_breakdown:
+                for row in model.memory_rows(spec, path=path):
+                    row = dict(row)
+                    row["saved_act_elems"] = int(
+                        row["saved_act_elems"] * activation_microbatches / config.parallel.cp_size
+                    )
+                    row["workspace_elems"] = int(row["workspace_elems"] / config.parallel.cp_size)
+                    module_breakdown.append(row)
 
         if config.parallel.num_layers_per_vp_stage:
-            # vpp
+            # Build the exact set of modules owned by every virtual chunk.
+            # The chunk weights are then replayed through Megatron's
+            # interleaved warmup/steady/cooldown order so only simultaneously
+            # live activations contribute to the peak.
+            chunk_specs = []
             for vp_rank, layer_specs in enumerate(layout[pp_rank]):
-                num_mbs_vp_rank = interleaved_vpp_activation_microbatches(
-                    pp_rank,
-                    vp_rank,
-                    pp_size,
-                    config.parallel.vp_size,
-                    num_microbatches,
-                )
-
+                specs = []
                 for layer_index, layer_spec in enumerate(layer_specs):
-                    add_spec(
-                        layer_spec,
-                        f"model.decoder.pp[{pp_rank}].vp[{vp_rank}].layers[{layer_index}]",
-                        num_mbs_vp_rank,
+                    specs.append(
+                        (
+                            layer_spec,
+                            f"model.decoder.pp[{pp_rank}].vp[{vp_rank}].layers[{layer_index}]",
+                        )
                     )
 
                 if pp_rank == 0 and vp_rank == 0:
                     if vision_spec is not None:
-                        add_spec(vision_spec, "model.vision_model", num_mbs_vp_rank)
-                    add_spec(embedding_spec, "model.embedding", num_mbs_vp_rank)
+                        specs.append((vision_spec, "model.vision_model"))
+                    specs.append((embedding_spec, "model.embedding"))
 
                 if pp_rank == pp_size - 1 and vp_rank == config.parallel.vp_size - 1:
-                    num_mbs_output = interleaved_vpp_output_microbatches(
-                        pp_rank,
-                        pp_size,
-                        num_microbatches,
-                    )
                     if mtp_spec is not None:
-                        add_spec(mtp_spec, "model.mtp", num_mbs_output)
-                    add_spec(decoder_norm_spec, "model.decoder.final_norm", num_mbs_output)
-                    add_spec(output_spec, "model.output_layer", num_mbs_output)
+                        specs.append((mtp_spec, "model.mtp"))
+                    specs.append((decoder_norm_spec, "model.decoder.final_norm"))
+                    specs.append((output_spec, "model.output_layer"))
+                chunk_specs.append(specs)
+
+            chunk_activation_weights = [
+                sum(model.activation_estimate(spec).saved_elements for spec, _ in specs)
+                for specs in chunk_specs
+            ]
+            vp_activation_microbatches = interleaved_peak_activation_counts(
+                pp_rank,
+                pp_size,
+                config.parallel.vp_size,
+                num_microbatches,
+                chunk_activation_weights,
+            )
+            activation_microbatches = sum(vp_activation_microbatches)
+            for specs, retained_microbatches in zip(
+                chunk_specs,
+                vp_activation_microbatches,
+            ):
+                for spec, path in specs:
+                    add_spec(spec, path, retained_microbatches)
 
         else:
             # for each pprank activation calc
@@ -208,6 +217,7 @@ def estimate_memory(log_result=False):
             "saved_act_elems": int(saved_activation_mem),
             "workspace_elems": int(peak_workspace_mem),
             "activation_microbatches": activation_microbatches,
+            "vp_activation_microbatches": vp_activation_microbatches,
             "expert_param_elems": int(expert_static_mem),
             "wgo_gib": wgo_gib,
             "act_gib": act_gib,

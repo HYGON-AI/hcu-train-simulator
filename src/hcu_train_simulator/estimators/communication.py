@@ -24,6 +24,7 @@ from hcu_train_simulator.estimators.deepep import estimate_deepep_phases
 
 
 BF16_BYTES = 2
+FP8_BYTES = 1
 DENSE_TP_ALL_GATHER_PER_LAYER = 6
 DENSE_TP_REDUCE_SCATTER_PER_LAYER = 4
 DENSE_TP_OUTPUT_ALL_GATHER_PER_MICROBATCH = 3
@@ -31,13 +32,50 @@ DENSE_TP_OUTPUT_REDUCE_SCATTER_PER_MICROBATCH = 2
 logger = get_logger(__name__)
 
 
-def get_pp_p2p_communication_count(pp_size, num_microbatches, pp_schedule="1f1b", vp_size=1):
+def communication_dtype_bytes(config):
+    """Bytes per element for the FP8-enabled TP/ETP/EP activation paths."""
+
+    if getattr(config.parallel, "use_fp8_training", False):
+        return FP8_BYTES
+    return BF16_BYTES
+
+
+def get_pp_p2p_total_communication_count(pp_size, num_microbatches, pp_schedule="1f1b", vp_size=1):
+    """Total forward/backward messages across all pipeline boundaries."""
+
     schedule = (pp_schedule or "1f1b").lower()
     if schedule in {"interleaved", "interleaved_1f1b"}:
         virtual_stages = pp_size * max(vp_size, 1)
     else:
         virtual_stages = pp_size
     return 2 * max(virtual_stages - 1, 0) * num_microbatches
+
+
+def get_pp_p2p_communication_count(pp_size, num_microbatches, pp_schedule="1f1b", vp_size=1):
+    """P2P message count on the busiest physical pipeline rank.
+
+    Iteration time is a per-rank critical-path quantity.  Summing every edge in
+    the pipeline serializes communication that actually runs concurrently on
+    different ranks.  Count both endpoints (forward and backward) owned by
+    each physical rank, then use the maximum rank load.
+    """
+
+    if pp_size <= 1:
+        return 0
+    schedule = (pp_schedule or "1f1b").lower()
+    virtual_stages = max(vp_size, 1) if schedule in {"interleaved", "interleaved_1f1b"} else 1
+    total_stages = pp_size * virtual_stages
+    per_rank_counts = []
+    for pp_rank in range(pp_size):
+        count_per_microbatch = 0
+        for vp_rank in range(virtual_stages):
+            stage = vp_rank * pp_size + pp_rank
+            if stage > 0:
+                count_per_microbatch += 2  # forward receive + backward send
+            if stage < total_stages - 1:
+                count_per_microbatch += 2  # forward send + backward receive
+        per_rank_counts.append(count_per_microbatch * num_microbatches)
+    return max(per_rank_counts)
 
 
 def estimate_pp_rank_param_elements(config, model_parameters, pp_rank):
@@ -64,11 +102,28 @@ def sequence_parallel_shard(config):
 
 def moe_ep_activation_payload_bytes(config):
     return (
-        BF16_BYTES
+        communication_dtype_bytes(config)
         * config.parallel.micro_batch_size
         * config.parallel.seq_length
         * config.transformer.hidden_size
         * config.transformer.moe_router_topk
+        / config.parallel.cp_size
+        / sequence_parallel_shard(config)
+    )
+
+
+def pp_activation_payload_bytes(config):
+    """Bytes in one pipeline activation/gradient tensor.
+
+    Megatron sends the sequence-parallel shard between pipeline ranks, so TP
+    divides the payload when sequence parallelism is enabled.
+    """
+
+    return (
+        BF16_BYTES
+        * config.parallel.micro_batch_size
+        * config.parallel.seq_length
+        * config.transformer.hidden_size
         / config.parallel.cp_size
         / sequence_parallel_shard(config)
     )
@@ -377,7 +432,7 @@ def apply_overlap(raw_comm_result, compute_result, config, domains, domain_overr
                 exposed_time,
             )
             continue
-        manual_ratio = getattr(config.parallel, f"{domain}_overlap_ratio", 0.0)
+        manual_ratio = getattr(config.parallel, f"{domain}_overlap_ratio", None)
         domain_mode = mode
         if domain == "pp" and not getattr(
             config.parallel,
@@ -385,6 +440,11 @@ def apply_overlap(raw_comm_result, compute_result, config, domains, domain_overr
             False,
         ):
             domain_mode = "none"
+        elif domain == "pp" and mode == "manual" and manual_ratio is None:
+            # Enabling Megatron P2P overlap must have an effect even when the
+            # user did not provide a calibrated manual ratio.  Fall back to
+            # the conservative automatic exposure model for this domain only.
+            domain_mode = "auto"
         if domain == "ep":
             ep_auto_overlap_enabled = getattr(
                 config.parallel,
@@ -425,6 +485,28 @@ def build_default_compute_result(config):
 
 
 def build_communication_simulator(config):
+    use_bandwidth_table = config.hardware.use_bandwidth_table
+    if use_bandwidth_table:
+        logger.info(
+            "Communication bandwidth mode: built-in measured bandwidth table; "
+            "configured bandwidth and efficiency values are not applied."
+        )
+    else:
+        logger.info(
+            "Communication bandwidth mode: configured one-direction GB/s; "
+            "communication efficiencies are applied."
+        )
+        logger.info(
+            "Configured communication bandwidths: intra=%.3f GB/s, "
+            "inter=%.3f GB/s; efficiencies: p2p_intra=%.3f, "
+            "collective_intra=%.3f, inter=%.3f.",
+            config.hardware.intra_bw_gbps,
+            config.hardware.inter_bw_gbps,
+            config.hardware.p2p_intra_efficiency,
+            config.hardware.collective_intra_efficiency,
+            config.hardware.collective_inter_efficiency,
+        )
+
     simulator = CommunicationSimulator()
     simulator.initialize_parallelism(
         num_gpus=config.parallel.num_gpus,
@@ -437,7 +519,14 @@ def build_communication_simulator(config):
         gpu_model=GPUType.BW1000,
         intra_node_bandwidth_gbps=config.hardware.intra_bw_gbps,
         inter_node_bandwidth_gbps=config.hardware.inter_bw_gbps,
-        bandwidth_table_dir=files("hcu_train_simulator.communication.bandwidth"),
+        p2p_intra_efficiency=config.hardware.p2p_intra_efficiency,
+        collective_intra_efficiency=config.hardware.collective_intra_efficiency,
+        collective_inter_efficiency=config.hardware.collective_inter_efficiency,
+        bandwidth_table_dir=(
+            files("hcu_train_simulator.communication.bandwidth")
+            if use_bandwidth_table
+            else None
+        ),
     )
     return simulator
 
@@ -468,7 +557,7 @@ def estimate_param_sync_communication_time(simulator, config, group_type, group_
 
     if config.parallel.use_distributed_optimizer:
         grad_rs_bytes = param_elements * BF16_BYTES
-        param_ag_bytes = param_elements / group_size * BF16_BYTES
+        param_ag_bytes = param_elements * BF16_BYTES
         reduce_scatter_time = simulator.get_communication_time(
             com_type=CommType.REDUCE_SCATTER,
             algorithm=Algorithm.RING,
@@ -540,7 +629,7 @@ def estimate_dense_tp_communication_time(simulator, config, dp_size):
         return 0.0
 
     activation_bytes = (
-        BF16_BYTES
+        communication_dtype_bytes(config)
         * config.parallel.micro_batch_size
         * config.parallel.seq_length
         * config.transformer.hidden_size
@@ -590,7 +679,7 @@ def estimate_vision_tp_communication_time(simulator, config, dp_size):
         dp_size,
     )
     activation_bytes = (
-        BF16_BYTES
+        communication_dtype_bytes(config)
         * config.parallel.micro_batch_size
         * config.parallel.vision_num_images
         * (
@@ -688,12 +777,13 @@ def estimate_communication(compute_result=None, log_result=False):
     num_microbatches = get_num_microbatches(config.parallel.global_batch_size, micro_batch_size, dp)
     simulator = build_communication_simulator(config)
     raw_result = {}
+    comm_bytes = communication_dtype_bytes(config)
 
     if num_experts is not None:
         # `number` is the number of collective invocations.  The communication
         # simulator already accounts for the ring's (group_size - 1) / group_size
         # traffic factor, so it must not be folded into the invocation count.
-        data_size = 2 * micro_batch_size * seq_length * hidden_size
+        data_size = comm_bytes * micro_batch_size * seq_length * hidden_size
         hidden_pair_time = estimate_ag_rs_communication_time(
             simulator,
             GroupType.TP,
@@ -701,7 +791,7 @@ def estimate_communication(compute_result=None, log_result=False):
             1,
         )
 
-        data_size = 2 * micro_batch_size * seq_length * num_experts
+        data_size = comm_bytes * micro_batch_size * seq_length * num_experts
         router_pair_time = estimate_ag_rs_communication_time(
             simulator,
             GroupType.ETP,
@@ -747,7 +837,7 @@ def estimate_communication(compute_result=None, log_result=False):
         if shared_expert_intermediate_total(config):
             logger.info("TP_shared_expert_raw_time: %.6fs", shared_tp_time)
 
-        data_size = 2 * micro_batch_size * seq_length * hidden_size / cp
+        data_size = pp_activation_payload_bytes(config)
         number = get_pp_p2p_communication_count(pp, num_microbatches, pp_schedule, vp)
         pp1_time = number * simulator.get_communication_time(
             com_type=CommType.P2P,
@@ -759,7 +849,7 @@ def estimate_communication(compute_result=None, log_result=False):
         raw_result["pp"] = pp1_time
         logger.debug("PP1 raw time: %.6fs", pp1_time)
 
-        data_size = 2 * micro_batch_size * seq_length * kv_dim / cp
+        data_size = 2 * micro_batch_size * seq_length * kv_dim
         number = 2 * layers * num_microbatches
         cp1_time = number * simulator.get_communication_time(
             com_type=CommType.ALL_GATHER,
@@ -823,7 +913,7 @@ def estimate_communication(compute_result=None, log_result=False):
             raw_result["ep"] = number * single_ep_time
             logger.debug("EP raw time: %.6fs", raw_result["ep"])
 
-        data_size = 2 * micro_batch_size * seq_length * hidden_size * top_k / ep
+        data_size = comm_bytes * micro_batch_size * seq_length * hidden_size * top_k / ep
         number = 3 * moe_layers * num_microbatches
         etp_time = estimate_ag_rs_communication_time(
             simulator,
@@ -856,7 +946,7 @@ def estimate_communication(compute_result=None, log_result=False):
         raw_result["tp"] = tp_time
         logger.debug("TP raw time: %.6fs", tp_time)
 
-        data_size = 2 * micro_batch_size * seq_length * hidden_size / cp
+        data_size = pp_activation_payload_bytes(config)
         number = get_pp_p2p_communication_count(pp, num_microbatches, pp_schedule, vp)
         pp1_time = number * simulator.get_communication_time(
             com_type=CommType.P2P,
@@ -868,7 +958,7 @@ def estimate_communication(compute_result=None, log_result=False):
         raw_result["pp"] = pp1_time
         logger.debug("PP1 raw time: %.6fs", pp1_time)
 
-        data_size = 2 * micro_batch_size * seq_length * kv_dim / cp
+        data_size = 2 * micro_batch_size * seq_length * kv_dim
         number = 2 * layers * num_microbatches
         cp1_time = number * simulator.get_communication_time(
             com_type=CommType.ALL_GATHER,
@@ -902,4 +992,3 @@ def estimate_communication(compute_result=None, log_result=False):
 if __name__ == "__main__":
     initialize_simulation("templates/config.yaml")
     _ = estimate_communication(log_result=True)
-

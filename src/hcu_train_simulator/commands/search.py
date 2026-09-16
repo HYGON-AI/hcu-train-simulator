@@ -14,6 +14,7 @@ from hcu_train_simulator.context import reset_config, set_config
 from hcu_train_simulator.estimators import estimate_communication, estimate_compute, estimate_memory
 from hcu_train_simulator.logging import log_step, log_table
 from hcu_train_simulator.modeling import ModelStatistics
+from hcu_train_simulator.parallelism import get_vpp_layer_candidates
 from hcu_train_simulator.simulator import (
     estimate_pp_schedule_bubble_time_ms,
     get_effective_module_time,
@@ -61,9 +62,53 @@ def _skip_unneeded_dense_candidate(model_config, parallel_config):
     return ep_size != 1 or etp_size not in (None, 1)
 
 
+def _iter_search_candidates(model_config, base_parallel_config, candidates):
+    """Expand the configured grid with legal VPP choices when unspecified."""
+
+    explicit_vpp = "num_layers_per_vp_stage" in candidates
+    num_layers = TransformerConfig.from_dict(model_config).num_layers
+    for candidate in _iter_candidates(base_parallel_config, candidates):
+        if explicit_vpp:
+            yield candidate
+            continue
+        pp_size = int(candidate.get("pp_size", base_parallel_config["pp_size"]))
+        for vp_layers in [None, *get_vpp_layer_candidates(num_layers, pp_size)]:
+            expanded = dict(candidate)
+            expanded["num_layers_per_vp_stage"] = vp_layers
+            yield expanded
+
+
+def _configure_vp_candidate(parallel_config, candidate, *, model_uses_moe=False):
+    """Translate the Megatron VP layer-count candidate into schedule settings.
+
+    ``num_layers_per_vp_stage`` remains the only user-facing VP search
+    parameter.  The virtual pipeline size is derived by SimulationConfig.
+    """
+
+    if "num_layers_per_vp_stage" not in candidate:
+        return
+    if candidate["num_layers_per_vp_stage"]:
+        parallel_config["pp_schedule"] = "interleaved_1f1b"
+        if "overlap_p2p_comm" not in candidate:
+            parallel_config["overlap_p2p_comm"] = True
+        if model_uses_moe and "ep_overlap_enabled" not in candidate:
+            parallel_config["ep_overlap_enabled"] = True
+    else:
+        parallel_config["pp_schedule"] = "1f1b"
+        if "overlap_p2p_comm" not in candidate:
+            parallel_config["overlap_p2p_comm"] = False
+        if "ep_overlap_enabled" not in candidate:
+            parallel_config["ep_overlap_enabled"] = False
+
+
 def _evaluate_candidate(model_config, estimator_config, candidate):
     candidate_config = copy.deepcopy(estimator_config)
     candidate_config["parallel_config"].update(candidate)
+    _configure_vp_candidate(
+        candidate_config["parallel_config"],
+        candidate,
+        model_uses_moe=not _is_dense_model(model_config),
+    )
 
     reset_config()
     try:
@@ -91,10 +136,12 @@ def _evaluate_candidate(model_config, estimator_config, candidate):
         )
         model_flops = ModelStatistics().compute_flops()
         mfu = model_flops / (iteration_time_ms / 1000 * 1e12 * config.parallel.num_gpus) / config.hardware.fp16_tflops
+        resolved_parallel = copy.deepcopy(candidate_config["parallel_config"])
+        resolved_parallel["vp_size"] = max(config.parallel.vp_size, 1)
 
         return {
             "candidate": candidate,
-            "parallel": copy.deepcopy(candidate_config["parallel_config"]),
+            "parallel": resolved_parallel,
             "memory": memory_result,
             "compute_time_ms": compute_time_ms,
             "communication_time_ms": communication_time_ms,
@@ -127,6 +174,10 @@ def _result_row(rank, result):
         "dp": parallel["num_gpus"] // (parallel["tp_size"] * parallel["cp_size"] * parallel["pp_size"]),
         "ep": parallel["ep_size"],
         "etp": parallel["etp_size"],
+        "vp_layers": parallel.get("num_layers_per_vp_stage") or "-",
+        "vp": parallel.get("vp_size", "-") if parallel.get("num_layers_per_vp_stage") else "-",
+        "schedule": parallel.get("pp_schedule", "1f1b"),
+        "ep_overlap": parallel.get("ep_overlap_enabled", False),
         "mbs": parallel["micro_batch_size"],
     }
 
@@ -158,7 +209,11 @@ def search_best_perf(config_path):
     valid_candidates = 0
     skipped_candidates = 0
 
-    for candidate in _iter_candidates(estimator_config["parallel_config"], candidates):
+    for candidate in _iter_search_candidates(
+        model_config,
+        estimator_config["parallel_config"],
+        candidates,
+    ):
         total_candidates += 1
         parallel_config = copy.deepcopy(estimator_config["parallel_config"])
         parallel_config.update(candidate)

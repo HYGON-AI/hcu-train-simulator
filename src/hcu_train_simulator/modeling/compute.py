@@ -73,8 +73,14 @@ class ComputeModel:
             setattr(self, k, v)
         self.model_spec = config.model_spec
 
-    def calc_compute_time(self, m, n, k, num_compute):
-        return 2 * m * n * k / (self.fp16_tflops * self.gemm_efficiency) / 1e9 * num_compute
+    def compute_tflops(self, *, use_fp8=False):
+        if use_fp8 and self.use_fp8_training:
+            return self.fp8_tflops
+        return self.fp16_tflops
+
+    def calc_compute_time(self, m, n, k, num_compute, *, use_fp8=False):
+        tflops = self.compute_tflops(use_fp8=use_fp8)
+        return 2 * m * n * k / (tflops * self.gemm_efficiency) / 1e9 * num_compute
 
     def calc_non_gemm_time(self, elements, ops_per_element, num_compute=1, efficiency=None):
         if not elements or not ops_per_element or not num_compute:
@@ -99,7 +105,6 @@ class ComputeModel:
             self.token_count()
             * self.moe_router_topk
             * self.ep_size
-            * self.etp_size
             / sequence_shard
         )
         return max(1, dispatched_tokens_per_rank / self.num_moe_experts)
@@ -304,8 +309,9 @@ class ComputeModel:
             * (per_head_qk + per_head_v)
         )
 
-        forward_time = forward_flops * num_compute / (self.fp16_tflops * self.gemm_efficiency) / 1e9
-        backward_time = backward_flops * num_compute / (self.fp16_tflops * self.gemm_efficiency * 0.5) / 1e9
+        tflops = self.compute_tflops(use_fp8=self.use_fp8_training)
+        forward_time = forward_flops * num_compute / (tflops * self.gemm_efficiency) / 1e9
+        backward_time = backward_flops * num_compute / (tflops * self.gemm_efficiency * 0.88) / 1e9
         return num_compute, forward_time, backward_time
 
     def attention_parts(self):
@@ -313,10 +319,23 @@ class ComputeModel:
             return ["mla_q_down", "mla_q_up", "mla_kv_down", "mla_kv_up", "attn_proj"]
         return ["qkv_weight", "attn_proj"]
 
+    def uses_fp8_gemm(self, module_path):
+        if not self.use_fp8_training or not module_path:
+            return False
+        return module_path.endswith(
+            (
+                ".self_attention.linear_qkv",
+                ".self_attention.linear_proj",
+                ".mlp.experts.linear_fc1",
+                ".mlp.experts.linear_fc2",
+            )
+        )
+
     def add_gemm_part(self, result, part, *, count_scale=1.0, module_spec=None, module_path=None):
         num_compute, m, k, n = resolve_gemm_shape(self, part)
         num_compute *= count_scale
-        cur_part_time = self.calc_compute_time(m, n, k, num_compute)
+        uses_fp8 = self.uses_fp8_gemm(module_path)
+        cur_part_time = self.calc_compute_time(m, n, k, num_compute, use_fp8=uses_fp8)
         row = {
                 "model_part": part,
                 "b": self.micro_batch_size,
@@ -328,6 +347,7 @@ class ComputeModel:
                 "forward_ms": cur_part_time,
                 "backward_ms": cur_part_time * 2,
                 "op_type": "gemm",
+                "compute_dtype": "fp8" if uses_fp8 else "fp16",
             }
         if part in {"moe_linear_fc1", "moe_linear_fc2"}:
             row["num_gemms"] = self.num_moe_experts // self.ep_size
@@ -434,6 +454,7 @@ class ComputeModel:
                 "forward_ms": fa_fwd * count_scale,
                 "backward_ms": fa_bwd * count_scale,
                 "op_type": "flash_attention",
+                "compute_dtype": "fp8" if self.use_fp8_training else "fp16",
             }
         self._attach_spec_metadata(row, module_spec, module_path)
         result.append(row)

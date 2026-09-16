@@ -50,6 +50,19 @@ def validate_config():
     parallel_config = config.parallel
     model_config = config.transformer
 
+    if not config.hardware.use_bandwidth_table:
+        assert config.hardware.intra_bw_gbps > 0, \
+            "hardware_config.intra_bw_gbps must be positive when use_bandwidth_table=false."
+        assert config.hardware.inter_bw_gbps > 0, \
+            "hardware_config.inter_bw_gbps must be positive when use_bandwidth_table=false."
+        communication_efficiencies = (
+            config.hardware.p2p_intra_efficiency,
+            config.hardware.collective_intra_efficiency,
+            config.hardware.collective_inter_efficiency,
+        )
+        assert all(0 < value <= 1 for value in communication_efficiencies), \
+            "hardware communication efficiencies must be in (0, 1]."
+
     profile_mode = str(config.profile.mode or "auto").lower()
     assert profile_mode in {"auto", "builtin", "theoretical"}, \
         "profile_config.mode must be one of: auto, builtin, theoretical."
@@ -136,6 +149,9 @@ def validate_config():
     if pp_schedule in {"interleaved", "interleaved_1f1b"}:
         assert parallel_config.num_layers_per_vp_stage, \
             "interleaved pp_schedule requires num_layers_per_vp_stage."
+    if parallel_config.num_layers_per_vp_stage:
+        assert pp_schedule in {"interleaved", "interleaved_1f1b"}, \
+            "num_layers_per_vp_stage requires an interleaved pp_schedule."
     parallel_config.pp_schedule = pp_schedule
 
     if parallel_config.overlap_p2p_comm:
@@ -143,6 +159,15 @@ def validate_config():
             "overlap_p2p_comm requires an interleaved VPP schedule."
         assert parallel_config.num_layers_per_vp_stage, \
             "overlap_p2p_comm requires num_layers_per_vp_stage."
+
+    if (
+        parallel_config.ep_overlap_enabled
+        and (parallel_config.overlap_mode or "auto").lower() == "auto"
+    ):
+        assert parallel_config.pp_size > 1, \
+            "ep_overlap_enabled requires pipeline parallelism."
+        assert parallel_config.num_layers_per_vp_stage, \
+            "ep_overlap_enabled requires an interleaved VPP schedule."
 
     if parallel_config.decoder_first_pipeline_num_layers or parallel_config.decoder_last_pipeline_num_layers:
         assert parallel_config.pp_size > 1, "Specifying the num layers of pp stage is enabled only when pp_size > 1."

@@ -182,6 +182,7 @@ def _lower_vision_layer(model, result, layer_spec, module_path):
     )
     forward_flops = 4 * batch * heads * seq * seq * head_dim
     backward_flops = forward_flops * 2.5
+    attention_tflops = model.compute_tflops(use_fp8=model.use_fp8_training)
     result.append(
         {
             "model_part": "vision_flash_attn",
@@ -202,20 +203,21 @@ def _lower_vision_layer(model, result, layer_spec, module_path):
             "forward_ms": (
                 forward_flops
                 * compute_count
-                / (model.fp16_tflops * model.gemm_efficiency)
+                / (attention_tflops * model.gemm_efficiency)
                 / 1e9
             ),
             "backward_ms": (
                 backward_flops
                 * compute_count
                 / (
-                    model.fp16_tflops
+                    attention_tflops
                     * model.gemm_efficiency
                     * 0.5
                 )
                 / 1e9
             ),
             "op_type": "flash_attention",
+            "compute_dtype": "fp8" if model.use_fp8_training else "fp16",
             "module_type": module_type_name(
                 attention.submodules.core_attention
             ),

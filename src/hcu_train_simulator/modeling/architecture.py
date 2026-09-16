@@ -20,21 +20,45 @@ def uses_mla(model):
     spec = model if isinstance(model, ModuleSpec) else getattr(model, "model_spec", None)
     if spec is None:
         raise TypeError("architecture queries require a resolved model_spec")
-    return spec_uses_mla(spec)
+    if not isinstance(model, ModuleSpec) and hasattr(model, "_uses_mla_cache"):
+        return model._uses_mla_cache
+    result = spec_uses_mla(spec)
+    if not isinstance(model, ModuleSpec):
+        try:
+            model._uses_mla_cache = result
+        except (AttributeError, TypeError):
+            pass
+    return result
 
 
 def uses_moe(model):
     spec = model if isinstance(model, ModuleSpec) else getattr(model, "model_spec", None)
     if spec is None:
         raise TypeError("architecture queries require a resolved model_spec")
-    return spec_uses_moe(spec)
+    if not isinstance(model, ModuleSpec) and hasattr(model, "_uses_moe_cache"):
+        return model._uses_moe_cache
+    result = spec_uses_moe(spec)
+    if not isinstance(model, ModuleSpec):
+        try:
+            model._uses_moe_cache = result
+        except (AttributeError, TypeError):
+            pass
+    return result
 
 
 def has_qk_norm(model):
     spec = model if isinstance(model, ModuleSpec) else getattr(model, "model_spec", None)
     if spec is None:
         raise TypeError("architecture queries require a resolved model_spec")
-    return spec_has_qk_norm(spec)
+    if not isinstance(model, ModuleSpec) and hasattr(model, "_has_qk_norm_cache"):
+        return model._has_qk_norm_cache
+    result = spec_has_qk_norm(spec)
+    if not isinstance(model, ModuleSpec):
+        try:
+            model._has_qk_norm_cache = result
+        except (AttributeError, TypeError):
+            pass
+    return result
 
 
 def qk_head_dim(model):
