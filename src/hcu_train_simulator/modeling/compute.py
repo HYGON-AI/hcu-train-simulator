@@ -99,7 +99,20 @@ class ComputeModel:
 
         return self.micro_batch_size * self.local_seq_length()
 
+    def sequence_parallel_token_count(self):
+        """Tokens owned by a rank while activations are sequence-sharded."""
+
+        shard = self.tp_size if self.sequence_parallel else 1
+        return self.token_count() / shard
+
     def moe_tokens_per_local_expert(self):
+        """Tokens processed by one local expert shard after ETP gathering.
+
+        ETP shards the expert intermediate dimension, but every ETP rank still
+        processes the gathered tokens for its weight shard.  Multiplying the
+        token dimension by ETP keeps global expert FLOPs invariant when ETP is
+        changed at a fixed world size.
+        """
         sequence_shard = self.tp_size if self.sequence_parallel else 1
         dispatched_tokens_per_rank = (
             self.token_count()
@@ -107,7 +120,12 @@ class ComputeModel:
             * self.ep_size
             / sequence_shard
         )
-        return max(1, dispatched_tokens_per_rank / self.num_moe_experts)
+        return max(
+            1,
+            dispatched_tokens_per_rank
+            * max(1, self.etp_size)
+            / self.num_moe_experts,
+        )
 
     def transformer_layers_on_critical_rank(self):
         return self.num_layers // self.pp_size + (self.mtp_num_layers or 0)
@@ -196,10 +214,10 @@ class ComputeModel:
 
     def topk_router(self):
         num_compute = self.transformer_compute_count()
-        return num_compute, self.num_moe_experts, self.hidden_size, self.token_count() // self.tp_size
+        return num_compute, self.num_moe_experts, self.hidden_size, self.sequence_parallel_token_count()
 
-    def transformer_element_count(self, width=None, tp_sharded=False):
-        shard = self.tp_size if tp_sharded else 1
+    def transformer_element_count(self, width=None, tp_sharded=False, sequence_sharded=False):
+        shard = self.tp_size if tp_sharded or (sequence_sharded and self.sequence_parallel) else 1
         return self.token_count() * (width or self.hidden_size) / shard
 
     def qk_norm_element_count(self):
@@ -238,7 +256,7 @@ class ComputeModel:
     def router_select_element_count(self):
         if not uses_moe(self):
             return 0
-        return self.token_count() * self.num_moe_experts / self.tp_size
+        return self.sequence_parallel_token_count() * self.num_moe_experts
 
     def cross_entropy_element_count(self):
         return self.token_count() * self.vocab_size / self.tp_size
@@ -262,28 +280,39 @@ class ComputeModel:
     def optimizer_param_elements(self):
         params = ParameterModel()
         layout = build_pipeline_layer_layout(self.model_spec, get_config().parallel)
-        max_params = 0
+        max_optimizer_params = 0
         for pp_rank, virtual_stages in enumerate(layout):
-            local_params = sum(
-                params.estimate(layer).total_elements
+            estimates = [
+                params.estimate(layer)
                 for layer_specs in virtual_stages
                 for layer in layer_specs
-            )
+            ]
             if pp_rank == 0:
-                local_params += params.input_embed()
+                estimates.append(params.estimate(self.model_spec.submodules.embedding))
                 vision_spec = getattr(self.model_spec.submodules, "vision_model", None)
                 if vision_spec is not None:
-                    local_params += params.estimate(vision_spec).total_elements
+                    estimates.append(params.estimate(vision_spec))
             if pp_rank == self.pp_size - 1:
                 mtp = params.mtp()
                 if mtp is not None:
-                    local_params += mtp.total_elements
-                local_params += params.output_layer()
-            max_params = max(max_params, local_params)
+                    estimates.append(mtp)
+                estimates.append(
+                    params.estimate(self.model_spec.submodules.decoder.submodules.layer_norm)
+                )
+                estimates.append(params.estimate(self.model_spec.submodules.output_layer))
 
-        if self.use_distributed_optimizer:
-            return max_params / max(1, self.dp_size * self.cp_size)
-        return max_params
+            dense_params = sum(estimate.dense_elements for estimate in estimates)
+            expert_params = sum(estimate.expert_elements for estimate in estimates)
+            if self.use_distributed_optimizer:
+                dense_params /= max(1, self.dp_size * self.cp_size)
+                edp_size = self.num_gpus / max(1, self.pp_size * self.ep_size * self.etp_size)
+                expert_params /= max(1, edp_size)
+            max_optimizer_params = max(
+                max_optimizer_params,
+                dense_params + expert_params,
+            )
+
+        return max_optimizer_params
 
     def fa_compute(self):
         num_compute = self.transformer_compute_count()
@@ -510,7 +539,7 @@ class ComputeModel:
         self.add_non_gemm_part(
             result,
             "final_rmsnorm",
-            self.transformer_element_count(),
+            self.transformer_element_count(sequence_sharded=True),
             self.microbatch_compute_count(),
             "rmsnorm",
             module_spec=final_norm_spec,
@@ -550,7 +579,7 @@ class ComputeModel:
         self.add_non_gemm_part(
             result,
             "attention_rmsnorm",
-            self.transformer_element_count(),
+            self.transformer_element_count(sequence_sharded=True),
             compute_count,
             "rmsnorm",
             covered_by_measured=(
@@ -657,7 +686,7 @@ class ComputeModel:
         self.add_non_gemm_part(
             result,
             "mlp_rmsnorm",
-            self.transformer_element_count(),
+            self.transformer_element_count(sequence_sharded=True),
             compute_count,
             "rmsnorm",
             covered_by_measured="linear_fc1" if module_is(mlp, MLP) else None,
@@ -770,7 +799,7 @@ class ComputeModel:
             self.add_non_gemm_part(
                 result,
                 "residual_dropout_add",
-                self.transformer_element_count(tp_sharded=True),
+                self.transformer_element_count(sequence_sharded=True),
                 compute_count,
                 "residual_dropout_add",
                 module_spec=bda_spec,

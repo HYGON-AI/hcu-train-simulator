@@ -50,18 +50,41 @@ def validate_config():
     parallel_config = config.parallel
     model_config = config.transformer
 
-    if not config.hardware.use_bandwidth_table:
-        assert config.hardware.intra_bw_gbps > 0, \
-            "hardware_config.intra_bw_gbps must be positive when use_bandwidth_table=false."
-        assert config.hardware.inter_bw_gbps > 0, \
-            "hardware_config.inter_bw_gbps must be positive when use_bandwidth_table=false."
-        communication_efficiencies = (
-            config.hardware.p2p_intra_efficiency,
-            config.hardware.collective_intra_efficiency,
-            config.hardware.collective_inter_efficiency,
-        )
-        assert all(0 < value <= 1 for value in communication_efficiencies), \
-            "hardware communication efficiencies must be in (0, 1]."
+    hardware = config.hardware
+    assert hardware.scale_out_bw_gbps is not None and hardware.scale_out_bw_gbps > 0, \
+        "hardware_config.scale_out_bw_gbps must be positive."
+    assert hardware.scale_out_efficiency is not None and 0 < hardware.scale_out_efficiency <= 1, \
+        "hardware_config.scale_out_efficiency must be in (0, 1]."
+    assert 0 < hardware.p2p_intra_efficiency <= 1, \
+        "hardware_config.p2p_intra_efficiency must be in (0, 1]."
+
+    if hardware.use_supernode:
+        assert hardware.scale_up_1_num_gpus is not None and hardware.scale_up_1_num_gpus > 0, \
+            "use_supernode=true requires a positive scale_up_1_num_gpus."
+        assert hardware.scale_up_2_num_gpus is not None and hardware.scale_up_2_num_gpus > 0, \
+            "use_supernode=true requires a positive scale_up_2_num_gpus."
+        assert hardware.scale_up_2_num_gpus > hardware.scale_up_1_num_gpus, \
+            "scale_up_2_num_gpus must be greater than scale_up_1_num_gpus."
+        assert hardware.scale_up_2_num_gpus % hardware.scale_up_1_num_gpus == 0, \
+            "scale_up_2_num_gpus must be divisible by scale_up_1_num_gpus."
+        assert hardware.scale_up_1_bw_gbps is not None and hardware.scale_up_1_bw_gbps > 0, \
+            "use_supernode=true requires a positive scale_up_1_bw_gbps."
+        assert hardware.scale_up_2_bw_gbps is not None and hardware.scale_up_2_bw_gbps > 0, \
+            "use_supernode=true requires a positive scale_up_2_bw_gbps."
+        assert hardware.scale_up_1_efficiency is not None and 0 < hardware.scale_up_1_efficiency <= 1, \
+            "use_supernode=true requires scale_up_1_efficiency in (0, 1]."
+        assert hardware.scale_up_2_efficiency is not None and 0 < hardware.scale_up_2_efficiency <= 1, \
+            "use_supernode=true requires scale_up_2_efficiency in (0, 1]."
+    else:
+        assert hardware.intra_node_num_gpus is not None and hardware.intra_node_num_gpus > 0, \
+            "use_supernode=false requires a positive intra_node_num_gpus."
+        assert hardware.intra_bw_gbps > 0, \
+            "use_supernode=false requires a positive intra_node_bw_gbps."
+        assert hardware.intra_node_efficiency is not None and 0 < hardware.intra_node_efficiency <= 1, \
+            "use_supernode=false requires intra_node_efficiency in (0, 1]."
+
+    assert config.parallel.num_gpus % config.hardware.gpus_per_node == 0, \
+        "num_gpus must be divisible by the configured intra-node/Scale-Up-1 GPU count."
 
     profile_mode = str(config.profile.mode or "auto").lower()
     assert profile_mode in {"auto", "builtin", "theoretical"}, \
@@ -80,6 +103,20 @@ def validate_config():
         "hidden_size must be divisible by tp_size."
     assert model_config.num_attention_heads % parallel_config.tp_size == 0, \
         "num_attention_heads must be divisible by tp_size."
+    if model_config.num_moe_experts:
+        assert parallel_config.etp_size and parallel_config.etp_size > 0, \
+            "etp_size must be positive for MoE models."
+        assert model_config.num_moe_experts % parallel_config.ep_size == 0, \
+            "num_experts must be divisible by ep_size."
+        assert model_config.moe_ffn_hidden_size % parallel_config.etp_size == 0, \
+            "moe_intermediate_size must be divisible by etp_size."
+        expert_parallel_size = (
+            parallel_config.pp_size
+            * parallel_config.ep_size
+            * parallel_config.etp_size
+        )
+        assert parallel_config.num_gpus % expert_parallel_size == 0, \
+            "num_gpus must be divisible by pp_size * ep_size * etp_size."
     if uses_mla(config):
         assert query_projection_dim(config) % parallel_config.tp_size == 0, \
             "MLA query projection dim must be divisible by tp_size."

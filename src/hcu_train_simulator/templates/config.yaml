@@ -50,7 +50,7 @@ parallel_config:
 
   # shard sequence tokens across tensor-parallel ranks
   sequence_parallel: True
-  
+
   micro_batch_size: 1
 
   global_batch_size: 256
@@ -132,35 +132,42 @@ hardware_config:
   # Tensor Core FP8
   fp8_tflops: 960
 
-  # number of GPUs per node
-  gpus_per_node: 8
-
   # HBM memory
   hbm_gib: 64
 
-  # Intra-node Interconnect Bandwidth
-  intra_bw_gbps: 224
+  # Whether the cluster uses a two-level Scale Up supernode topology. False or True
+  use_supernode: False
 
-  # Inter-node Interconnection Bandwidth
-  inter_bw_gbps: 64
+  # Required only when use_supernode=False:
+  intra_node_num_gpus: 8
+  intra_node_bw_gbps: 224
+  intra_node_efficiency: 0.7
+
+  # Required only when use_supernode=True. scale_up_2_num_gpus is the total
+  # GPU count in one supernode and must be divisible by scale_up_1_num_gpus.
+#  scale_up_1_num_gpus: 96
+#  scale_up_1_bw_gbps: 1600
+#  scale_up_1_efficiency: 0.45
+#  scale_up_2_num_gpus: 768
+#  scale_up_2_bw_gbps: 550
+#  scale_up_2_efficiency: 0.4
+
+  # Common Scale Out parameters for both topology modes.
+  scale_out_bw_gbps: 64
+  scale_out_efficiency: 0.8
+
+  # Common efficiency for point-to-point traffic inside a standard node or
+  # inside the level-1 Scale Up domain of a supernode.
+  p2p_intra_efficiency: 0.8
 
   # GEMM Computational Efficiency
-  gemm_efficiency: 0.4
+  gemm_efficiency: 0.6
 
   # Non-GEMM vector/elementwise compute efficiency
   non_gemm_efficiency: 0.08
 
   # Optimizer step compute efficiency
   optimizer_efficiency: 0.04
-
-  # Intra-node P2P communication efficiency
-  p2p_intra_efficiency: 0.8
-
-  # Intra-node P2P collective efficiency
-  collective_intra_efficiency: 0.7
-
-  # Inter-node P2P collective efficiency  (collectives and PP P2P)
-  collective_inter_efficiency: 0.8
 
 # Operator performance profile configuration.
 # mode:
