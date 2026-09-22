@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .communication_simulator import CommunicationEngine, CommunicationSimulator
-from .types import Algorithm, CommType, GPUType, GroupType, SingleFlow
+from .types import Algorithm, CommType, GPUType, GroupType, LinkType, SingleFlow
 
 __all__ = [
     "Algorithm",
@@ -11,5 +11,6 @@ __all__ = [
     "CommType",
     "GPUType",
     "GroupType",
+    "LinkType",
     "SingleFlow",
 ]

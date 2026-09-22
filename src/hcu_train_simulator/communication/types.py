@@ -5,11 +5,13 @@ from dataclasses import dataclass, field
 from typing import List
 from enum import Enum
 
+
 class GroupType(str, Enum):
     """通信组类型"""
     TP = "TP"
     CP = "CP"
     DP = "DP"
+    DP_CP = "DP_CP"
     EP = "EP"
     ETP = "ETP"
     PP = "PP"
@@ -39,6 +41,16 @@ class Algorithm(str, Enum):
     NVLS = "NVLS"
     NVLS_TREE = "NVLS_TREE"
 
+
+class LinkType(str, Enum):
+    """Physical fabric used by a point-to-point flow."""
+
+    INTRA_NODE = "INTRA_NODE"
+    SCALE_UP_1 = "SCALE_UP_1"
+    SCALE_UP_2 = "SCALE_UP_2"
+    SCALE_OUT = "SCALE_OUT"
+
+
 @dataclass
 class SingleFlow:
     """点对点通信原语"""
@@ -52,7 +64,7 @@ class SingleFlow:
     chunk_id: int = 0
     chunk_count: int = 0
     tag: str = ""
-    
+
     # def __repr__(self):
     #     return (f"Flow({self.flow_id}: {self.src}→{self.dest}, "
     #             f"size={self.size}, tag={self.tag})")

@@ -295,7 +295,7 @@ def _iter_parallel_candidates(model_config: dict, estimator_config: dict, world_
     mbs = int(parallel["micro_batch_size"])
     preferred_gbs = int(parallel["global_batch_size"])
     max_bubble = float(estimator_config["_solve_max_bubble_ratio"])
-    gpus_per_node = int(hardware["gpus_per_node"])
+    gpus_per_node = _configured_gpus_per_node(hardware)
 
     tp_values = _powers_of_two(min(32, transformer.hidden_size, transformer.num_attention_heads))
     cp_values = [value for value in _powers_of_two(min(16, seq_length)) if seq_length % value == 0]
@@ -565,6 +565,20 @@ def _attach_performance(model_config, estimator_config, result):
         return result
 
 
+def _configured_gpus_per_node(hardware: dict) -> int:
+    """Return the physical node/Scale-Up-1 width for either topology mode."""
+    if hardware.get("use_supernode", False):
+        value = hardware.get("scale_up_1_num_gpus")
+    else:
+        value = hardware.get("intra_node_num_gpus", hardware.get("gpus_per_node"))
+    if value is None or int(value) <= 0:
+        raise ValueError(
+            "hardware topology must configure intra_node_num_gpus or "
+            "scale_up_1_num_gpus for solve"
+        )
+    return int(value)
+
+
 def _result_rows(label: str, result: dict, hardware: dict, memory_limit: float) -> tuple[dict, dict, dict]:
     parallel = result["parallel"]
     peak = _peak_memory(result["memory"])
@@ -573,7 +587,7 @@ def _result_rows(label: str, result: dict, hardware: dict, memory_limit: float) 
     strategy = {
         "solution": label,
         "gpus": world,
-        "nodes": math.ceil(world / hardware["gpus_per_node"]),
+        "nodes": math.ceil(world / _configured_gpus_per_node(hardware)),
         "tp": parallel["tp_size"],
         "cp": parallel["cp_size"],
         "pp": parallel["pp_size"],
@@ -656,7 +670,7 @@ def solve_training_config(config_path: str, options: SolveOptions | None = None)
         raise ValueError("memory margin must be smaller than hardware_config.hbm_gib")
 
     parameters, adapter = _model_scale(model_config, estimator_config)
-    gpus_per_node = int(estimator_config["hardware_config"]["gpus_per_node"])
+    gpus_per_node = _configured_gpus_per_node(estimator_config["hardware_config"])
     static_18b = math.ceil(parameters * 18 / (memory_limit * 1024**3))
     # At DP=1 the repository's BF16 + FP32 Adam state is 18 bytes per
     # parameter.  Increasing DP only replicates weights/gradients, so it cannot

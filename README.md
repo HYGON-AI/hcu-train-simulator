@@ -108,21 +108,41 @@ VPP 候选。非空候选自动使用 `interleaved_1f1b` 并启用 P2P overlap�
 |:---------------------------:|:------:|:-----------------------------------:|
 |         fp16_tflops         |  480   |       FP16峰值算力（TFLOPS）        |
 |         fp8_tflops          |  960   |        FP8峰值算力（TFLOPS）        |
-|        gpus_per_node        |   8    |            单节点GPU卡数            |
 |           hbm_gib           |   64   |         单卡HBM容量（GiB）          |
 |       use_bandwidth_table   |  true  |      是否使用内置实测通信带宽       |
-|        intra_bw_gbps        |  224   |   单卡节点内单向聚合带宽（GB/s）    |
-|        inter_bw_gbps        |   64   |   单卡节点间单向聚合带宽（GB/s）    |
-|       gemm_efficiency       |  0.4   |            GEMM计算效率             |
+|       use_supernode         | false  | 是否使用两级 Scale Up 超节点拓扑    |
+|   intra_node_num_gpus       |   /    | 普通节点模式下的单节点 GPU 数       |
+|   intra_node_bw_gbps        |   /    | 普通节点模式节点内带宽（GB/s）      |
+| intra_node_efficiency       |   /    | 普通节点模式节点内通信效率          |
+| scale_up_1_num_gpus         |   /    | 超节点模式一级 Scale Up GPU 数      |
+| scale_up_1_bw_gbps          |   /    | 一级 Scale Up 带宽（GB/s）          |
+| scale_up_1_efficiency       |   /    | 一级 Scale Up 通信效率              |
+| scale_up_2_num_gpus         |   /    | 超节点模式二级域总 GPU 数           |
+| scale_up_2_bw_gbps          |   /    | 二级 Scale Up 带宽（GB/s）          |
+| scale_up_2_efficiency       |   /    | 二级 Scale Up 通信效率              |
+| scale_out_bw_gbps           |   /    | 共用的 Scale Out 带宽（GB/s）       |
+| scale_out_efficiency        |   /    | 共用的 Scale Out 通信效率           |
+| p2p_intra_efficiency        |   /    | 普通节点内或一级域内的 P2P 通信效率 |
+|       gemm_efficiency       |  0.6   |            GEMM计算效率             |
 |     non_gemm_efficiency     |  0.08  | 非 GEMM vector/elementwise 计算效率 |
 |    optimizer_efficiency     |  0.04  |       Optimizer step 计算效率       |
-|    p2p_intra_efficiency     |  0.8   |          节点内P2P通信效率          |
-| collective_intra_efficiency |  0.7   |         节点内集合通信效率          |
-| collective_inter_efficiency |  0.8   |         节点间集合通信效率          |
 
-`use_bandwidth_table=true` 时直接使用内置实测有效带宽，不再重复应用通信效率参数。
-设置为 `false` 时，`intra_bw_gbps` 和 `inter_bw_gbps` 按单卡单向聚合峰值带宽（十进制 GB/s）解释，
-实际计算带宽为峰值带宽乘对应效率；跨节点 P2P 使用现有的 `collective_inter_efficiency`。
+`use_supernode=false` 时只配置 `intra_node_*` 与共用的 `scale_out_*`。
+`use_supernode=true` 时只配置 `scale_up_1_*`、`scale_up_2_*` 与共用的
+`scale_out_*`。`scale_up_2_num_gpus` 表示一个完整二级域内的总 GPU 数，并且必须是
+`scale_up_1_num_gpus` 的整数倍。配置加载时会对当前模式的必填项、带宽、效率和
+层级整除关系做严格校验；如果同时填写另一种模式的字段，会直接报错，避免配置被
+静默忽略。旧版 `gpus_per_node`、`intra_bw_gbps`、`inter_bw_gbps` 和效率字段仍按
+普通节点模式兼容读取。
+
+`p2p_intra_efficiency` 是两种模式共用的独立参数：普通节点内 P2P 和超节点一级
+Scale Up 域内 P2P 使用该效率；相同链路上的集合通信分别使用
+`intra_node_efficiency` 或 `scale_up_1_efficiency`。二级 Scale Up 和 Scale Out
+通信继续使用各自层级的效率。
+
+`use_bandwidth_table=true` 时继续直接使用原有内置实测有效带宽，不使用上述三级带宽、
+拓扑分层或通信效率参数。设置为 `false` 时，各带宽按单卡单向聚合峰值带宽
+（十进制 GB/s）解释，实际带宽为峰值带宽乘对应层级的效率。
 
 ### 2.4 搜索参数配置
 

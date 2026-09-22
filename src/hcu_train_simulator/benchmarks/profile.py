@@ -452,6 +452,27 @@ class OperatorProfileStore:
         item = flash_attention.get(key)
         if entry_is_validated(item):
             return item, self.source
+        module = module or {}
+        seq = _as_int(module.get("seq"))
+        kv_seq = _as_int(module.get("kv_seq"))
+        if seq is not None and seq == kv_seq:
+            # Profiles written before kv_seq became part of the key are safe
+            # only for self-attention where Q and KV have the same length.
+            legacy_key = make_profile_key(
+                {
+                    "batch": module.get("b"),
+                    "seq": seq,
+                    "heads": module.get("heads"),
+                    "head_dim": module.get("head_dim"),
+                    "value_head_dim": module.get("value_head_dim", module.get("head_dim")),
+                    "dtype": dtype,
+                    "causal": str(module.get("causal", True)).lower(),
+                },
+                ["batch", "seq", "heads", "head_dim", "value_head_dim", "dtype", "causal"],
+            )
+            item = flash_attention.get(legacy_key)
+            if entry_is_validated(item):
+                return item, f"{self.source} (legacy equal-Q/KV key)"
         return None, ""
 
     def find_non_gemm(self, model_part: Any, elements: Any, dtype: str) -> tuple[dict[str, Any] | None, str]:
@@ -483,6 +504,7 @@ class OperatorProfileStore:
             {
                 "batch": module.get("b", parallel.micro_batch_size),
                 "seq": module.get("seq", parallel.seq_length // max(1, parallel.cp_size)),
+                "kv_seq": module.get("kv_seq", parallel.seq_length),
                 "heads": module.get("heads", model.num_attention_heads // max(1, parallel.tp_size)),
                 "head_dim": module.get("head_dim", model.kv_channels),
                 "value_head_dim": module.get(
@@ -495,6 +517,7 @@ class OperatorProfileStore:
             [
                 "batch",
                 "seq",
+                "kv_seq",
                 "heads",
                 "head_dim",
                 "value_head_dim",

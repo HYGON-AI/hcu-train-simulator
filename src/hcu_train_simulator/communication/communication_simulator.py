@@ -4,7 +4,7 @@
 from hcu_train_simulator.communication.algorithms.ring import RingAlgorithm
 from hcu_train_simulator.communication.groups import GroupManager
 from hcu_train_simulator.communication.topology import Topology
-from hcu_train_simulator.communication.types import Algorithm, CommType, GPUType, GroupType, SingleFlow
+from hcu_train_simulator.communication.types import Algorithm, CommType, GPUType, GroupType, LinkType, SingleFlow
 from hcu_train_simulator.logging import get_logger
 
 import os
@@ -264,24 +264,37 @@ class CommunicationEngine:
                  gpu_model: str = None,
                  p2p_intra_efficiency: float = 1.0,
                  collective_intra_efficiency: float = 1.0,
-                 collective_inter_efficiency: float = 1.0):
+                 collective_inter_efficiency: float = 1.0,
+                 scale_up_bandwidth_gbps: float = None,
+                 collective_scale_up_efficiency: float = 1.0):
         self.topology = topology
         self.group_manager = GroupManager(topology)
         self.algorithms: Dict[CommType, object] = {}
         self._configured = False
         self.intra_node_bandwidth_gbps = intra_node_bandwidth_gbps
         self.inter_node_bandwidth_gbps = inter_node_bandwidth_gbps
+        self.scale_up_bandwidth_gbps = (
+            inter_node_bandwidth_gbps
+            if scale_up_bandwidth_gbps is None
+            else scale_up_bandwidth_gbps
+        )
         self.p2p_intra_efficiency = p2p_intra_efficiency
         self.collective_intra_efficiency = collective_intra_efficiency
+        self.collective_scale_up_efficiency = collective_scale_up_efficiency
         self.collective_inter_efficiency = collective_inter_efficiency
         self.bandwidth_lookup = None
         if bandwidth_table_dir and gpu_model:
             self.bandwidth_lookup = BandwidthLookup(bandwidth_table_dir)
             self.gpu_model = gpu_model
             self.num_nodes = topology.num_nodes
-        elif intra_node_bandwidth_gbps <= 0 or inter_node_bandwidth_gbps <= 0:
+        elif (
+            intra_node_bandwidth_gbps <= 0
+            or self.scale_up_bandwidth_gbps <= 0
+            or inter_node_bandwidth_gbps <= 0
+        ):
             raise ValueError(
-                "intra_node_bandwidth_gbps and inter_node_bandwidth_gbps must "
+                "intra_node_bandwidth_gbps, scale_up_bandwidth_gbps, and "
+                "inter_node_bandwidth_gbps must "
                 "be positive when no bandwidth table is configured"
             )
 
@@ -335,11 +348,27 @@ class CommunicationEngine:
 
     def get_effective_bandwidth(self, flow: SingleFlow, com_type: CommType) -> float:
         """Return effective one-direction bandwidth for a flow in GB/s."""
-        if flow.tag in ["PXN", "PXN_INIT", "NVLS"]:
+        link_type = self.topology.get_link_type(flow.src, flow.dest)
+        if self.topology.use_supernode:
+            if link_type == LinkType.SCALE_UP_1:
+                efficiency = (
+                    self.p2p_intra_efficiency
+                    if com_type == CommType.P2P
+                    else self.collective_intra_efficiency
+                )
+                return self.intra_node_bandwidth_gbps * efficiency
+            if link_type == LinkType.SCALE_UP_2:
+                return self.scale_up_bandwidth_gbps * self.collective_scale_up_efficiency
             return self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
-        if com_type == CommType.P2P:
-            return self.intra_node_bandwidth_gbps * self.p2p_intra_efficiency
-        return self.intra_node_bandwidth_gbps * self.collective_intra_efficiency
+
+        if link_type == LinkType.INTRA_NODE:
+            efficiency = (
+                self.p2p_intra_efficiency
+                if com_type == CommType.P2P
+                else self.collective_intra_efficiency
+            )
+            return self.intra_node_bandwidth_gbps * efficiency
+        return self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
 
     def simulate_communication_time(self, flows: List[SingleFlow], com_type: CommType = None, nranks: int = None,
                                     data_size: int = None, group_info=None) -> float:
@@ -403,6 +432,7 @@ class CommunicationEngine:
         total_data = sum(flow.size for flow in flows)
         total_data_gb = total_data / 1_000_000_000
         tag_stats = {}
+        link_type_stats = {}
         for flow in flows:
             tag = flow.tag
             if tag not in tag_stats:
@@ -410,6 +440,14 @@ class CommunicationEngine:
             tag_stats[tag]['count'] += 1
             tag_stats[tag]['total_size_bytes'] += flow.size
             tag_stats[tag]['total_size_gb'] = tag_stats[tag]['total_size_bytes'] / 1_000_000_000
+            link_type = self.topology.get_link_type(flow.src, flow.dest).value
+            if link_type not in link_type_stats:
+                link_type_stats[link_type] = {'count': 0, 'total_size_bytes': 0, 'total_size_gb': 0}
+            link_type_stats[link_type]['count'] += 1
+            link_type_stats[link_type]['total_size_bytes'] += flow.size
+            link_type_stats[link_type]['total_size_gb'] = (
+                link_type_stats[link_type]['total_size_bytes'] / 1_000_000_000
+            )
         pair_stats = {}
         for flow in flows:
             pair = (flow.src, flow.dest)
@@ -420,7 +458,36 @@ class CommunicationEngine:
             pair_stats[pair]['total_size_gb'] = pair_stats[pair]['total_size_bytes'] / 1_000_000_000
         tag_time_stats = {}
         for tag, stats in tag_stats.items():
-            representative = next(flow for flow in flows if flow.tag == tag)
+            tag_flows = [flow for flow in flows if flow.tag == tag]
+            bandwidths = (
+                set()
+                if self.bandwidth_lookup
+                else {
+                    self.get_effective_bandwidth(
+                        flow, com_type or CommType.ALL_REDUCE
+                    )
+                    for flow in tag_flows
+                }
+            )
+            # Legacy algorithm tags such as PXN can now span both Scale Up and
+            # Scale Out. Do not report a misleading single bandwidth for them.
+            bandwidth = next(iter(bandwidths)) if len(bandwidths) == 1 else None
+            transfer_time = (
+                stats['total_size_gb'] / bandwidth
+                if bandwidth is not None and bandwidth > 0
+                else None
+            )
+            tag_time_stats[tag] = {
+                'bandwidth_gbps': bandwidth,
+                'theoretical_time_sec': transfer_time
+            }
+        link_type_time_stats = {}
+        for link_type, stats in link_type_stats.items():
+            representative = next(
+                flow
+                for flow in flows
+                if self.topology.get_link_type(flow.src, flow.dest).value == link_type
+            )
             bandwidth = (
                 None
                 if self.bandwidth_lookup
@@ -433,15 +500,17 @@ class CommunicationEngine:
                 if bandwidth is not None and bandwidth > 0
                 else None
             )
-            tag_time_stats[tag] = {
+            link_type_time_stats[link_type] = {
                 'bandwidth_gbps': bandwidth,
-                'theoretical_time_sec': transfer_time
+                'theoretical_time_sec': transfer_time,
             }
         return {
             'total_flows': len(flows),
             'total_data_bytes': total_data,
             'total_data_gb': total_data_gb,
             'tag_stats': tag_stats,
+            'link_type_stats': link_type_stats,
+            'link_type_time_stats': link_type_time_stats,
             'tag_time_stats': tag_time_stats,
             'pair_stats': pair_stats,
             'flows': flows
@@ -471,7 +540,11 @@ class CommunicationSimulator:
                          p2p_intra_efficiency: float = 1.0,
                          collective_intra_efficiency: float = 1.0,
                          collective_inter_efficiency: float = 1.0,
-                         bandwidth_table_dir: Traversable = None):
+                         bandwidth_table_dir: Traversable = None,
+                         nodes_per_supernode: int = 1,
+                         scale_up_bandwidth_gbps: float = None,
+                         collective_scale_up_efficiency: float = 1.0,
+                         use_supernode: bool = False):
         """
         初始化并行配置
         :param gpu_model: GPU型号字符串，如 "bw500SM"，将用于查找表文件名
@@ -486,17 +559,28 @@ class CommunicationSimulator:
         self.topology = Topology.create_uniform(
             num_nodes=num_nodes,
             gpus_per_node=gpus_per_node,
+            nodes_per_supernode=nodes_per_supernode,
+            use_supernode=use_supernode,
             gpu_type=GPUType.BW1100
         )
-        logger.debug("topology: nodes=%s gpus=%s", self.topology.num_nodes, self.topology.num_gpus)
+        logger.debug(
+            "topology: mode=%s nodes=%s supernodes=%s nodes_per_supernode=%s gpus=%s",
+            "supernode" if self.topology.use_supernode else "standard",
+            self.topology.num_nodes,
+            self.topology.num_supernodes,
+            self.topology.nodes_per_supernode,
+            self.topology.num_gpus,
+        )
         self.engine = CommunicationEngine(
             self.topology,
             intra_node_bandwidth_gbps,
             inter_node_bandwidth_gbps,
+            scale_up_bandwidth_gbps=scale_up_bandwidth_gbps,
             bandwidth_table_dir=bandwidth_table_dir,
             gpu_model=gpu_model,
             p2p_intra_efficiency=p2p_intra_efficiency,
             collective_intra_efficiency=collective_intra_efficiency,
+            collective_scale_up_efficiency=collective_scale_up_efficiency,
             collective_inter_efficiency=collective_inter_efficiency,
         )
         dp_size = num_gpus // (tp_size * cp_size * pp_size)
@@ -512,7 +596,7 @@ class CommunicationSimulator:
             edp_size=edp_size
         )
         # 打印组信息（略）
-        for group_type in [GroupType.TP, GroupType.CP, GroupType.DP,
+        for group_type in [GroupType.TP, GroupType.CP, GroupType.DP, GroupType.DP_CP,
                            GroupType.EP, GroupType.ETP, GroupType.EDP, GroupType.PP]:
             for rank in range(min(8, num_gpus)):
                 info = self.engine.get_group_info(rank, group_type)
@@ -603,7 +687,8 @@ class CommunicationSimulator:
         flows = self.engine.get_communication_flows(rank, com_type, data_size, group_type)
         if not flows:
             return {'total_time': 0.0, 'total_flows': 0, 'total_data_gb': 0.0,
-                    'tag_stats': {}, 'tag_time_stats': {}}
+                    'tag_stats': {}, 'tag_time_stats': {},
+                    'link_type_stats': {}, 'link_type_time_stats': {}}
         group_info = self.engine.get_group_info(rank, group_type)
         nranks = group_info.n_ranks if group_info else 0
         total_time = self.get_communication_time(
@@ -619,5 +704,7 @@ class CommunicationSimulator:
             'total_flows': details['total_flows'],
             'total_data_gb': details['total_data_gb'],
             'tag_stats': details['tag_stats'],
+            'link_type_stats': details['link_type_stats'],
+            'link_type_time_stats': details['link_type_time_stats'],
             'tag_time_stats': details['tag_time_stats']
         }

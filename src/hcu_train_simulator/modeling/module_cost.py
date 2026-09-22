@@ -202,6 +202,10 @@ class ModuleSpecMemoryModel:
     def _tokens(self):
         return self.micro_batch_size * self.seq_length
 
+    def _sequence_tokens(self):
+        shard = self.tp_size if self.sequence_parallel else 1
+        return self._tokens() / shard
+
     def _vision_tokens(self):
         if not self.config.vision.enabled:
             return 0
@@ -217,7 +221,7 @@ class ModuleSpecMemoryModel:
             return registered(self, spec, layer_uses_moe)
 
         if module_is(spec, Embedding):
-            return ActivationEstimate(tokens * self.hidden_size)
+            return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if spec.module in {SelfAttention, MLASelfAttention, GatedSelfAttention}:
             if not layer_uses_moe:
                 # Preserve the established Megatron dense-layer approximation:
@@ -231,14 +235,15 @@ class ModuleSpecMemoryModel:
         if module_is(spec, MLP):
             return ActivationEstimate(tokens * self.ffn_hidden_size / self.tp_size * 4)
         if module_is(spec, MoELayer):
+            sequence_shard = self.tp_size if self.sequence_parallel else 1
             pre_dispatch_tokens = self.micro_batch_size * (
-                self.seq_length / self.tp_size * self.etp_size
+                self.seq_length / sequence_shard * self.etp_size
             )
             router = pre_dispatch_tokens * self.hidden_size * 2
             dispatch = pre_dispatch_tokens * self.hidden_size * self.moe_router_topk
             expert_base = (
                 self.micro_batch_size
-                * (self.seq_length / self.tp_size * self.etp_size * self.moe_router_topk)
+                * (self.seq_length / sequence_shard * self.etp_size * self.moe_router_topk)
                 * self.moe_ffn_hidden_size
                 / self.etp_size
             )
@@ -246,11 +251,11 @@ class ModuleSpecMemoryModel:
             shared = tokens * shared_expert_intermediate_total(self) / self.tp_size * 3
             return ActivationEstimate(router + dispatch + experts + shared)
         if module_is(spec, BiasDropoutAdd) and role != "vision_residual_add":
-            return ActivationEstimate(tokens * self.hidden_size / self.tp_size)
+            return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if module_is(spec, TENorm) and role == "mlp_rmsnorm":
-            return ActivationEstimate(tokens * self.hidden_size / self.tp_size)
+            return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if module_is(spec, TENorm) and role == "final_rmsnorm":
-            return ActivationEstimate(tokens * self.hidden_size)
+            return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if role == "lm_head":
             elements = (
                 tokens
