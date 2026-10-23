@@ -6,6 +6,7 @@ from hcu_train_simulator.communication.topology import Topology
 from hcu_train_simulator.communication.types import GroupType
 from dataclasses import dataclass
 
+
 @dataclass
 class GroupInfo:
     group_id: int
@@ -14,7 +15,8 @@ class GroupInfo:
     n_ranks: int
     ranks: List[int]
     nvswitch_ids: List[int]
-    
+    n_supernodes: int = 1
+
     @property
     def ranks_per_node(self) -> int:
         return self.n_ranks // self.n_nodes if self.n_nodes > 0 else self.n_ranks
@@ -22,13 +24,13 @@ class GroupInfo:
 
 class GroupManager:
     """通信组管理器 - Megatron风格分组"""
-    
+
     def __init__(self, topology: Topology):
         self.topology = topology
         self.rank_to_group: Dict[Tuple[int, GroupType], int] = {}
         self.groups: Dict[int, GroupInfo] = {}
         self._next_group_id = 0
-    
+
     def _add_group(self, group_info: GroupInfo) -> int:
         group_id = self._next_group_id
         self._next_group_id += 1
@@ -37,7 +39,7 @@ class GroupManager:
         for rank in group_info.ranks:
             self.rank_to_group[(rank, group_info.group_type)] = group_id
         return group_id
-    
+
     def _get_nvswitch_ids_for_ranks(self, ranks: List[int]) -> List[int]:
         """根据rank列表获取涉及的NVSwitch ID列表（去重）"""
         gpus_per_node = self.topology.num_gpus // self.topology.num_nodes
@@ -47,9 +49,9 @@ class GroupManager:
             if nid < len(self.topology.nodes) and self.topology.nodes[nid].nvswitch_ids:
                 nvswitch_ids.append(self.topology.nodes[nid].nvswitch_ids[0])
         return nvswitch_ids
-    
+
     def build_groups(self, tp_size: int = 1, cp_size: int = 1, dp_size: int = 1,
-                 ep_size: int = 1, etp_size: int = 1, edp_size: int = 1, pp_size: int = 1):
+                     ep_size: int = 1, etp_size: int = 1, edp_size: int = 1, pp_size: int = 1):
         """
         按照两种独立的并行维度构建通信组：
         1) TP -> CP -> DP -> PP
@@ -61,9 +63,9 @@ class GroupManager:
 
         # ========== 验证乘积条件 ==========
         assert tp_size * cp_size * dp_size * pp_size == total_gpus, \
-            f"TP*CP*DP*PP ({tp_size*cp_size*dp_size*pp_size}) != total_gpus ({total_gpus})"
+            f"TP*CP*DP*PP ({tp_size * cp_size * dp_size * pp_size}) != total_gpus ({total_gpus})"
         assert ep_size * etp_size * edp_size * pp_size == total_gpus, \
-            f"EP*ETP*EDP*PP ({ep_size*etp_size*edp_size*pp_size}) != total_gpus ({total_gpus})"
+            f"EP*ETP*EDP*PP ({ep_size * etp_size * edp_size * pp_size}) != total_gpus ({total_gpus})"
 
         # ========== 辅助函数：根据坐标筛选 rank ==========
         def get_ranks_by_coord(rank_to_coord, coord_filter):
@@ -100,7 +102,9 @@ class GroupManager:
                                 if coord[idx] != val:
                                     return False
                             return True
+
                         return filter_func
+
                     filter_func = make_filter(other_dims, other_vals, target_dim)
                     ranks = get_ranks_by_coord(rank_to_coord, filter_func)
                     if ranks:
@@ -129,6 +133,21 @@ class GroupManager:
         }
         groups1 = collect_groups(rank_to_coord1, dim_sizes1, dim_names1, group_type_map1)
 
+        # Megatron's distributed optimizer shards dense parameters over the
+        # data-parallel-with-context-parallel group.  Keep the ordinary DP
+        # groups for callers that specifically need them, and build the
+        # combined group explicitly for parameter reduce-scatter/all-gather.
+        dp_cp_groups = []
+        for pp in range(pp_size):
+            for tp in range(tp_size):
+                ranks = get_ranks_by_coord(
+                    rank_to_coord1,
+                    lambda coord, pp=pp, tp=tp: coord[0] == pp and coord[3] == tp,
+                )
+                if ranks:
+                    dp_cp_groups.append(ranks)
+        groups1[GroupType.DP_CP] = dp_cp_groups
+
         # ========== 2. 构建 EP/ETP/EDP/PP 坐标系统 ==========
         # 坐标顺序: (pp, edp, etp, ep)  注意 PP 顺序一致，EDP 对应原来的 DP 角色
         dim_names2 = ['pp', 'edp', 'ep', 'etp']
@@ -146,7 +165,7 @@ class GroupManager:
         group_type_map2 = {
             'etp': GroupType.ETP,
             'ep': GroupType.EP,
-            'edp': GroupType.EDP,   # 需要确保 GroupType 中有 EDP
+            'edp': GroupType.EDP,  # 需要确保 GroupType 中有 EDP
             'pp': GroupType.PP,
         }
         groups2 = collect_groups(rank_to_coord2, dim_sizes2, dim_names2, group_type_map2)
@@ -171,8 +190,8 @@ class GroupManager:
 
         # ========== 4. 按顺序添加组 ==========
         # 顺序：TP -> CP -> DP -> ETP -> EP -> EDP -> PP
-        order = [GroupType.TP, GroupType.CP, GroupType.DP,
-                GroupType.ETP, GroupType.EP, GroupType.EDP, GroupType.PP]
+        order = [GroupType.TP, GroupType.CP, GroupType.DP, GroupType.DP_CP,
+                 GroupType.ETP, GroupType.EP, GroupType.EDP, GroupType.PP]
 
         for gtype in order:
             if gtype not in all_groups:
@@ -185,16 +204,17 @@ class GroupManager:
                 self._add_group(GroupInfo(
                     group_id=-1, group_type=gtype,
                     n_nodes=n_nodes, n_ranks=len(ranks),
-                    ranks=ranks, nvswitch_ids=nvswitch_ids
+                    ranks=ranks, nvswitch_ids=nvswitch_ids,
+                    n_supernodes=len({self.topology.get_supernode_id(rank) for rank in ranks}),
                 ))
-                
+
     def get_group_info(self, rank: int, group_type: GroupType) -> Optional[GroupInfo]:
         key = (rank, group_type)
         if key not in self.rank_to_group:
             return None
         group_id = self.rank_to_group[key]
         return self.groups.get(group_id)
-    
+
     def get_group_ranks(self, rank: int, group_type: GroupType) -> List[int]:
         info = self.get_group_info(rank, group_type)
         return info.ranks if info else []

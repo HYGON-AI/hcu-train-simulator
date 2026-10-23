@@ -349,10 +349,119 @@ class HardwareConfig:
     non_gemm_efficiency: float = 0.08
     optimizer_efficiency: float = 0.04
     use_bandwidth_table: bool = True
+    # Resolved communication fields. New YAML should use the explicit
+    # mode-specific names handled by from_dict; these fields keep downstream
+    # code and legacy YAML compatible.
+    use_supernode: bool = False
+    nodes_per_supernode: int = 1
+    scale_up_bw_gbps: Optional[float] = None
+    collective_scale_up_efficiency: float = 1.0
+    intra_node_num_gpus: Optional[int] = None
+    intra_node_efficiency: Optional[float] = None
+    scale_up_1_num_gpus: Optional[int] = None
+    scale_up_1_bw_gbps: Optional[float] = None
+    scale_up_1_efficiency: Optional[float] = None
+    scale_up_2_num_gpus: Optional[int] = None
+    scale_up_2_bw_gbps: Optional[float] = None
+    scale_up_2_efficiency: Optional[float] = None
+    scale_out_bw_gbps: Optional[float] = None
+    scale_out_efficiency: Optional[float] = None
 
     @classmethod
     def from_dict(cls, config):
-        return cls(**config)
+        use_supernode = bool(config.get("use_supernode", False))
+        standard_keys = {
+            "intra_node_num_gpus",
+            "intra_node_bw_gbps",
+            "intra_node_efficiency",
+            "gpus_per_node",
+            "intra_bw_gbps",
+            "collective_intra_efficiency",
+        }
+        supernode_keys = {
+            "scale_up_1_num_gpus",
+            "scale_up_1_bw_gbps",
+            "scale_up_1_efficiency",
+            "scale_up_2_num_gpus",
+            "scale_up_2_bw_gbps",
+            "scale_up_2_efficiency",
+            "nodes_per_supernode",
+            "scale_up_bw_gbps",
+            "collective_scale_up_efficiency",
+        }
+        inactive_keys = standard_keys if use_supernode else supernode_keys
+        configured_inactive = sorted(key for key in inactive_keys if key in config)
+        if configured_inactive:
+            active_mode = "supernode" if use_supernode else "standard-node"
+            raise ValueError(
+                f"hardware_config selects {active_mode} mode but also configures "
+                f"inactive fields: {', '.join(configured_inactive)}"
+            )
+        scale_out_bw = config.get("scale_out_bw_gbps", config.get("inter_bw_gbps"))
+        scale_out_efficiency = config.get(
+            "scale_out_efficiency",
+            config.get("collective_inter_efficiency"),
+        )
+        p2p_intra_efficiency = config.get("p2p_intra_efficiency")
+
+        common = dict(
+            fp16_tflops=config["fp16_tflops"],
+            fp8_tflops=config["fp8_tflops"],
+            hbm_gib=config["hbm_gib"],
+            gemm_efficiency=config["gemm_efficiency"],
+            non_gemm_efficiency=config.get("non_gemm_efficiency", 0.08),
+            optimizer_efficiency=config.get("optimizer_efficiency", 0.04),
+            use_bandwidth_table=config.get("use_bandwidth_table", True),
+            use_supernode=use_supernode,
+            inter_bw_gbps=scale_out_bw or 0,
+            collective_inter_efficiency=scale_out_efficiency or 0,
+            p2p_intra_efficiency=p2p_intra_efficiency or 0,
+            scale_out_bw_gbps=scale_out_bw,
+            scale_out_efficiency=scale_out_efficiency,
+        )
+
+        if use_supernode:
+            level1_size = config.get("scale_up_1_num_gpus")
+            level2_size = config.get("scale_up_2_num_gpus")
+            level1_bw = config.get("scale_up_1_bw_gbps")
+            level2_bw = config.get("scale_up_2_bw_gbps")
+            level1_efficiency = config.get("scale_up_1_efficiency")
+            level2_efficiency = config.get("scale_up_2_efficiency")
+            nodes_per_supernode = (
+                level2_size // level1_size
+                if level1_size and level2_size and level2_size % level1_size == 0
+                else 0
+            )
+            return cls(
+                **common,
+                gpus_per_node=level1_size or 0,
+                intra_bw_gbps=level1_bw or 0,
+                collective_intra_efficiency=level1_efficiency or 0,
+                nodes_per_supernode=nodes_per_supernode,
+                scale_up_bw_gbps=level2_bw,
+                collective_scale_up_efficiency=level2_efficiency or 0,
+                scale_up_1_num_gpus=level1_size,
+                scale_up_1_bw_gbps=level1_bw,
+                scale_up_1_efficiency=level1_efficiency,
+                scale_up_2_num_gpus=level2_size,
+                scale_up_2_bw_gbps=level2_bw,
+                scale_up_2_efficiency=level2_efficiency,
+            )
+
+        intra_size = config.get("intra_node_num_gpus", config.get("gpus_per_node"))
+        intra_bw = config.get("intra_node_bw_gbps", config.get("intra_bw_gbps"))
+        intra_efficiency = config.get(
+            "intra_node_efficiency",
+            config.get("collective_intra_efficiency"),
+        )
+        return cls(
+            **common,
+            gpus_per_node=intra_size or 0,
+            intra_bw_gbps=intra_bw or 0,
+            collective_intra_efficiency=intra_efficiency or 0,
+            intra_node_num_gpus=intra_size,
+            intra_node_efficiency=intra_efficiency,
+        )
 
 
 @dataclass

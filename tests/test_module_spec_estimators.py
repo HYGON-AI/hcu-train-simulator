@@ -7,6 +7,7 @@ from dataclasses import replace
 from hcu_train_simulator.config.models import SimulationConfig
 from hcu_train_simulator.context import reset_config, set_config
 from hcu_train_simulator.modeling import ComputeModel, ModuleSpecMemoryModel
+from hcu_train_simulator.modeling.parameters import ParameterModel
 from hcu_train_simulator.modeling.spec import get_representative_layer_spec
 from hcu_train_simulator.modeling.spec import (
     GatedDeltaNet,
@@ -17,11 +18,17 @@ from hcu_train_simulator.modeling.spec import (
     get_layer_specs,
     module_is,
 )
-from hcu_train_simulator.benchmarks.operators import build_benchmark_config, filtered_plan
+from hcu_train_simulator.benchmarks.operators import (
+    build_benchmark_config,
+    filtered_plan,
+    moe_tokens_per_local_expert as benchmark_moe_tokens_per_local_expert,
+)
+from hcu_train_simulator.benchmarks.profile import OperatorProfileStore
 from hcu_train_simulator.benchmarks.registry import get_benchmark_case
 from hcu_train_simulator.simulator import get_benchmark_module_map
 from hcu_train_simulator.config.loader import validate_config
 from hcu_train_simulator.estimators import estimate_communication, estimate_compute, estimate_memory
+from hcu_train_simulator.estimators.communication import moe_etp_activation_payload_bytes
 from hcu_train_simulator.modeling.statistics import ModelStatistics
 from hcu_train_simulator.modeling.compute_registry import (
     get_attention_lowering,
@@ -221,6 +228,140 @@ class ModuleSpecEstimatorTest(unittest.TestCase):
             sum(row["expert_param_elems"] for row in rows),
         )
         self.assertIn("topk_router", {row["role"] for row in rows})
+
+    def test_etp_preserves_expert_flops_and_updates_benchmark_shape(self):
+        configs = []
+        for etp_size in (1, 2):
+            config = build_config(moe=True)
+            config.parallel.num_gpus = 4
+            config.parallel.dp_size = 4
+            config.parallel.etp_size = etp_size
+            configs.append(config)
+
+        shapes = []
+        benchmark_tokens = []
+        swiglu_elements = []
+        for config in configs:
+            set_config(config)
+            compute = ComputeModel()
+            shapes.append((compute.moe_linear_fc1(), compute.moe_linear_fc2()))
+            swiglu_elements.append(compute.moe_swiglu_element_count())
+            benchmark_config = build_benchmark_config(config)
+            benchmark_tokens.append(
+                benchmark_moe_tokens_per_local_expert(benchmark_config)
+            )
+            reset_config()
+
+        (fc1_etp1, fc2_etp1), (fc1_etp2, fc2_etp2) = shapes
+        self.assertEqual(fc1_etp2[2], 2 * fc1_etp1[2])
+        self.assertEqual(fc1_etp2[1], fc1_etp1[1] // 2)
+        self.assertEqual(fc2_etp2[2], 2 * fc2_etp1[2])
+        self.assertEqual(fc2_etp2[3], fc2_etp1[3] // 2)
+        self.assertEqual(
+            fc1_etp1[0] * fc1_etp1[1] * fc1_etp1[2] * fc1_etp1[3],
+            fc1_etp2[0] * fc1_etp2[1] * fc1_etp2[2] * fc1_etp2[3],
+        )
+        self.assertEqual(
+            fc2_etp1[0] * fc2_etp1[1] * fc2_etp1[2] * fc2_etp1[3],
+            fc2_etp2[0] * fc2_etp2[1] * fc2_etp2[2] * fc2_etp2[3],
+        )
+        self.assertEqual(swiglu_elements[0], swiglu_elements[1])
+        self.assertEqual(benchmark_tokens[1], 2 * benchmark_tokens[0])
+
+    def test_etp_payload_uses_full_collective_tensor(self):
+        config = build_config(moe=True)
+        config.parallel.etp_size = 2
+        config.parallel.num_gpus = 4
+        config.parallel.dp_size = 4
+
+        expected = (
+            2
+            * config.parallel.micro_batch_size
+            * config.parallel.seq_length
+            * config.transformer.hidden_size
+            * config.transformer.moe_router_topk
+            / config.parallel.cp_size
+            / config.parallel.tp_size
+            * config.parallel.etp_size
+        )
+        self.assertEqual(moe_etp_activation_payload_bytes(config), expected)
+
+    def test_optimizer_compute_shards_dense_and_expert_params_separately(self):
+        config = build_config(moe=True)
+        config.parallel.num_gpus = 8
+        config.parallel.dp_size = 4
+        config.parallel.cp_size = 2
+        config.parallel.etp_size = 1
+        set_config(config)
+
+        params = ParameterModel().estimate(config.model_spec)
+        edp_size = (
+            config.parallel.num_gpus
+            / config.parallel.pp_size
+            / config.parallel.ep_size
+            / config.parallel.etp_size
+        )
+        expected = (
+            params.dense_elements / (config.parallel.dp_size * config.parallel.cp_size)
+            + params.expert_elements / edp_size
+        )
+        self.assertEqual(ComputeModel().optimizer_param_elements(), expected)
+
+    def test_sequence_parallel_only_shards_sequence_owned_operations(self):
+        config = build_config(moe=True)
+        config.parallel.tp_size = 2
+        config.parallel.dp_size = 1
+        config.parallel.num_gpus = 2
+        config.parallel.sequence_parallel = True
+        set_config(config)
+        sp_compute = ComputeModel()
+        sp_router = sp_compute.topk_router()
+        sp_norm = sp_compute.transformer_element_count(sequence_sharded=True)
+        sp_qk_norm = sp_compute.qk_norm_element_count()
+        reset_config()
+
+        config.parallel.sequence_parallel = False
+        set_config(config)
+        no_sp_compute = ComputeModel()
+        no_sp_router = no_sp_compute.topk_router()
+        no_sp_norm = no_sp_compute.transformer_element_count(sequence_sharded=True)
+        no_sp_qk_norm = no_sp_compute.qk_norm_element_count()
+
+        self.assertEqual(no_sp_router[3], 2 * sp_router[3])
+        self.assertEqual(no_sp_norm, 2 * sp_norm)
+        self.assertEqual(no_sp_qk_norm, sp_qk_norm)
+
+        sp_config = build_benchmark_config(config, {"sequence_parallel": True})
+        no_sp_config = build_benchmark_config(config, {"sequence_parallel": False})
+        self.assertEqual(no_sp_config["sequence_tokens"], 2 * sp_config["sequence_tokens"])
+        self.assertEqual(no_sp_config["tokens"], sp_config["tokens"])
+
+    def test_flash_attention_profile_key_includes_kv_sequence_length(self):
+        config = build_config()
+        store = OperatorProfileStore(None, config, data={})
+        local_kv_key = store.flash_attention_key(
+            "bf16",
+            {"b": 1, "seq": 8, "kv_seq": 8, "heads": 2, "head_dim": 32},
+        )
+        global_kv_key = store.flash_attention_key(
+            "bf16",
+            {"b": 1, "seq": 8, "kv_seq": 16, "heads": 2, "head_dim": 32},
+        )
+
+        self.assertNotEqual(local_kv_key, global_kv_key)
+        self.assertIn("kv_seq=8", local_kv_key)
+        self.assertIn("kv_seq=16", global_kv_key)
+
+    def test_validation_rejects_invalid_expert_parallel_factorization(self):
+        config = build_config(moe=True)
+        config.parallel.etp_size = 2
+        set_config(config)
+
+        with self.assertRaisesRegex(
+            AssertionError,
+            "pp_size \\* ep_size \\* etp_size",
+        ):
+            validate_config()
 
     def test_pipeline_layout_uses_each_concrete_layer_spec(self):
         dense_config = build_config()

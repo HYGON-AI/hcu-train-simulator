@@ -206,6 +206,9 @@ def finalize_config(config: dict) -> dict[str, int | float | str | bool | list[s
         seq if config["attention_kv_context"] == "global" else config["local_seq_length"]
     )
     config["tokens"] = int(config["micro_batch_size"]) * int(config["local_seq_length"])
+    sequence_shard = int(config["tp_size"]) if bool(config.get("sequence_parallel", True)) else 1
+    config["sequence_seq_length"] = div_ceil(config["local_seq_length"], sequence_shard)
+    config["sequence_tokens"] = int(config["micro_batch_size"]) * config["sequence_seq_length"]
     config["etp_size"] = int(config.get("etp_size") or config["tp_size"])
     config["has_qk_norm"] = bool(config.get("has_qk_norm", False))
     config["uses_mla"] = bool(config.get("uses_mla", False))
@@ -378,9 +381,10 @@ def moe_tokens_per_local_expert(config: dict) -> int:
     topk = int(config["topk"])
     experts = int(config["num_experts"])
     ep = int(config["ep_size"])
+    etp = int(config["etp_size"])
     tp = int(config["tp_size"])
     sequence_shard = tp if bool(config.get("sequence_parallel", True)) else 1
-    return max(1, div_ceil(tokens * topk * ep, experts * sequence_shard))
+    return max(1, div_ceil(tokens * topk * ep * etp, experts * sequence_shard))
 
 
 def _extend_registered_plans(plan, config):
@@ -397,6 +401,8 @@ def build_operator_plan(config: dict) -> list[OperatorPlan]:
     kv_seq = int(config["attention_kv_seq_length"])
     batch = int(config["micro_batch_size"])
     tokens = int(config["tokens"])
+    sequence_seq = int(config["sequence_seq_length"])
+    sequence_tokens = int(config["sequence_tokens"])
     tp = int(config["tp_size"])
     ep = int(config["ep_size"])
     etp = int(config["etp_size"])
@@ -430,15 +436,15 @@ def build_operator_plan(config: dict) -> list[OperatorPlan]:
     plan = [
         OperatorPlan("te_linear_qkv", "te", "linear_qkv -> te.pytorch.LayerNormLinear", f"[{tokens},{hidden}] x [{hidden},{qkv_out}]", "transformer_engine"),
         OperatorPlan("te_linear_proj", "te", "linear_proj -> te.pytorch.Linear", f"[{tokens},{q_heads_rank * head_dim}] x [{q_heads_rank * head_dim},{hidden}]", "transformer_engine"),
-        OperatorPlan("te_rmsnorm", "te", "TENorm -> te.pytorch.RMSNorm", f"[{batch},{seq},{hidden}]", "transformer_engine"),
+        OperatorPlan("te_rmsnorm", "te", "TENorm -> te.pytorch.RMSNorm", f"[{batch},{sequence_seq},{hidden}]", "transformer_engine"),
         OperatorPlan("torch_lm_head", "loss", "lm_head -> torch.nn.Module", f"[{tokens},{hidden}] x [{hidden},{vocab_rank}]"),
-        OperatorPlan("torch_layernorm", "torch", "LayerNorm forward+backward", f"[{batch},{seq},{hidden}]"),
-        OperatorPlan("torch_rmsnorm", "torch", "RMSNorm forward+backward", f"[{batch},{seq},{hidden}]"),
+        OperatorPlan("torch_layernorm", "torch", "LayerNorm forward+backward", f"[{batch},{sequence_seq},{hidden}]"),
+        OperatorPlan("torch_rmsnorm", "torch", "RMSNorm forward+backward", f"[{batch},{sequence_seq},{hidden}]"),
         OperatorPlan("te_fused_rope", "te", "Transformer Engine fused RoPE forward+backward", f"q/k=[{batch},{seq},{q_heads_rank},{head_dim}]", "transformer_engine"),
         OperatorPlan("torch_rope", "torch", "Fallback Rotary position embedding forward+backward", f"q/k=[{batch},{seq},{q_heads_rank},{head_dim}]"),
         OperatorPlan("torch_softmax_dropout", "torch", "Attention score softmax/dropout forward+backward", f"[{batch},{q_heads_rank},{seq},{kv_seq}]"),
-        OperatorPlan("torch_bias_dropout_add", "torch", "Bias/dropout/residual add forward+backward", f"[{batch},{seq},{hidden}]"),
-        OperatorPlan("torch_residual_add", "torch", "Residual add forward+backward without dropout", f"[{batch},{seq},{hidden}]"),
+        OperatorPlan("torch_bias_dropout_add", "torch", "Bias/dropout/residual add forward+backward", f"[{batch},{sequence_seq},{hidden}]"),
+        OperatorPlan("torch_residual_add", "torch", "Residual add forward+backward without dropout", f"[{batch},{sequence_seq},{hidden}]"),
         OperatorPlan("torch_sdpa_attention", "torch", "PyTorch scaled_dot_product_attention forward+backward", f"q=[{batch},{q_heads_rank},{seq},{qk_head_dim}], k=[{batch},{attention_kv_heads_rank},{kv_seq},{qk_head_dim}], v=[{batch},{attention_kv_heads_rank},{kv_seq},{value_head_dim}]"),
         OperatorPlan("flash_attention", "fa", "Flash Attention forward+backward", f"q=[{batch},{seq},{q_heads_rank},{qk_head_dim}], k=[{batch},{kv_seq},{attention_kv_heads_rank},{qk_head_dim}], v=[{batch},{kv_seq},{attention_kv_heads_rank},{value_head_dim}]", "flash_attn"),
         OperatorPlan("torch_vocab_parallel_cross_entropy", "loss", "Vocab-parallel cross entropy approximation", f"logits=[{tokens},{vocab_rank}], tp={tp}"),
@@ -471,7 +477,7 @@ def build_operator_plan(config: dict) -> list[OperatorPlan]:
     if experts <= 1:
         return _extend_registered_plans(plan, config)
 
-    plan.append(OperatorPlan("torch_moe_router", "moe", "router -> Router(MegatronModule): linear, softmax, top-k", f"[{tokens},{hidden}] x [{hidden},{experts}], topk={topk}"))
+    plan.append(OperatorPlan("torch_moe_router", "moe", "router -> Router(MegatronModule): linear, softmax, top-k", f"[{sequence_tokens},{hidden}] x [{hidden},{experts}], topk={topk}"))
     if shared_experts:
         plan.extend(
             [
@@ -646,6 +652,8 @@ class BenchRunner:
         kv_seq = int(cfg["attention_kv_seq_length"])
         batch = int(cfg["micro_batch_size"])
         tokens = int(cfg["tokens"])
+        sequence_seq = int(cfg["sequence_seq_length"])
+        sequence_tokens = int(cfg["sequence_tokens"])
         tp = int(cfg["tp_size"])
         ep = int(cfg["ep_size"])
         etp = int(cfg["etp_size"])
@@ -680,7 +688,7 @@ class BenchRunner:
             if plan.name == "torch_moe_swiglu_activation":
                 local_experts = max(1, div_ceil(experts, ep))
                 benchmark_local_experts = min(int(cfg.get("max_local_experts") or local_experts), local_experts)
-                activation_tokens = benchmark_local_experts * max(1, tokens * topk // experts)
+                activation_tokens = benchmark_local_experts * moe_tokens_per_local_expert(cfg)
             x = self._randn(activation_tokens, 2 * activation_ffn, requires_grad=True)
 
             def fn():
@@ -692,10 +700,10 @@ class BenchRunner:
             return self._measure(plan, fn)
         if plan.name == "torch_layernorm":
             module = self.torch.nn.LayerNorm(hidden, device=self.device, dtype=self.dtype)
-            x = self._randn(batch, seq, hidden, requires_grad=True)
+            x = self._randn(batch, sequence_seq, hidden, requires_grad=True)
             return self._module_bwd(plan, module, x)
         if plan.name == "torch_rmsnorm":
-            x = self._randn(batch, seq, hidden, requires_grad=True)
+            x = self._randn(batch, sequence_seq, hidden, requires_grad=True)
             weight = self.torch.ones(hidden, device=self.device, dtype=self.dtype, requires_grad=True)
 
             def fn():
@@ -759,8 +767,8 @@ class BenchRunner:
 
             return self._measure(plan, fn)
         if plan.name == "torch_bias_dropout_add":
-            x = self._randn(batch, seq, hidden, requires_grad=True)
-            residual = self._randn(batch, seq, hidden, requires_grad=True)
+            x = self._randn(batch, sequence_seq, hidden, requires_grad=True)
+            residual = self._randn(batch, sequence_seq, hidden, requires_grad=True)
             bias = self._randn(hidden, requires_grad=True)
             dropout_p = float(cfg["dropout_p"])
 
@@ -774,8 +782,8 @@ class BenchRunner:
 
             return self._measure(plan, fn)
         if plan.name == "torch_residual_add":
-            x = self._randn(batch, seq, hidden, requires_grad=True)
-            residual = self._randn(batch, seq, hidden, requires_grad=True)
+            x = self._randn(batch, sequence_seq, hidden, requires_grad=True)
+            residual = self._randn(batch, sequence_seq, hidden, requires_grad=True)
 
             def fn():
                 y = x + residual
@@ -841,13 +849,13 @@ class BenchRunner:
                 shared_ffn_rank=shared_ffn_rank,
                 tokens=tokens,
                 batch=batch,
-                seq=seq,
+                seq=sequence_seq,
                 experts=experts,
                 topk=topk,
                 ep=ep,
             )
         if plan.name == "torch_moe_router":
-            x = self._randn(tokens, hidden, requires_grad=True)
+            x = self._randn(sequence_tokens, hidden, requires_grad=True)
             gate = self._randn(hidden, experts, requires_grad=True)
 
             def fn():
@@ -857,7 +865,7 @@ class BenchRunner:
                 vals.sum().backward()
                 self._zeros_grad(x, gate)
 
-            return self._measure(plan, fn, flops_per_iter=6 * tokens * hidden * experts)
+            return self._measure(plan, fn, flops_per_iter=6 * sequence_tokens * hidden * experts)
         if plan.name == "torch_vocab_parallel_cross_entropy":
             logits = self._randn(tokens, vocab_rank, requires_grad=True)
             targets = self.torch.randint(0, vocab_rank, (tokens,), device=self.device)

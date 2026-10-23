@@ -112,6 +112,25 @@ def moe_ep_activation_payload_bytes(config):
     )
 
 
+def moe_etp_activation_payload_bytes(config):
+    """Full ETP collective tensor size for routed activations.
+
+    The ring implementation accepts the full all-gather output/reduce-scatter
+    input size and divides it into one chunk per ETP rank internally.
+    """
+
+    return (
+        communication_dtype_bytes(config)
+        * config.parallel.micro_batch_size
+        * config.parallel.seq_length
+        * config.transformer.hidden_size
+        * config.transformer.moe_router_topk
+        / config.parallel.cp_size
+        / sequence_parallel_shard(config)
+        * config.parallel.etp_size
+    )
+
+
 def pp_activation_payload_bytes(config):
     """Bytes in one pipeline activation/gradient tensor.
 
@@ -183,7 +202,7 @@ def estimate_pp_rank_expert_data_parallel_param_elements(config, model_parameter
 
 
 def estimate_dp_param_elements(config):
-    if config.parallel.dp_size <= 1:
+    if config.parallel.dp_size * config.parallel.cp_size <= 1:
         return 0
 
     model_parameters = ParameterModel()
@@ -273,7 +292,7 @@ OVERLAP_DEFAULTS = {
     # show roughly 30-40% aggregate communication overlap, while the previous
     # TP defaults hid about 72% whenever the compute window was large enough.
     "tp": {"eff": 0.80, "floor": 0.55, "max": 0.45, "window": 0.30},
-    "cp": {"eff": 0.40, "floor": 0.40, "max": 0.40, "window": 0.30},
+    "cp": {"eff": 1.0, "floor": 0.50, "max": 0.50, "window": 1.0},
     "dp": {"eff": 0.70, "floor": 0.40, "max": 0.60, "window": 0.60},
     "pp": {"eff": 0.45, "floor": 0.60, "max": 0.40, "window": 0.20},
     "ep": {"eff": 0.40, "floor": 0.50, "max": 0.40, "window": 0.30},
@@ -496,16 +515,34 @@ def build_communication_simulator(config):
             "Communication bandwidth mode: configured one-direction GB/s; "
             "communication efficiencies are applied."
         )
-        logger.info(
-            "Configured communication bandwidths: intra=%.3f GB/s, "
-            "inter=%.3f GB/s; efficiencies: p2p_intra=%.3f, "
-            "collective_intra=%.3f, inter=%.3f.",
-            config.hardware.intra_bw_gbps,
-            config.hardware.inter_bw_gbps,
-            config.hardware.p2p_intra_efficiency,
-            config.hardware.collective_intra_efficiency,
-            config.hardware.collective_inter_efficiency,
-        )
+        if config.hardware.use_supernode:
+            logger.info(
+                "Configured supernode topology: Scale-Up-1=%s GPUs at %.3f GB/s "
+                "(collective efficiency %.3f, P2P efficiency %.3f), "
+                "Scale-Up-2=%s GPUs at %.3f GB/s "
+                "(efficiency %.3f), Scale-Out=%.3f GB/s (efficiency %.3f).",
+                config.hardware.scale_up_1_num_gpus,
+                config.hardware.scale_up_1_bw_gbps,
+                config.hardware.scale_up_1_efficiency,
+                config.hardware.p2p_intra_efficiency,
+                config.hardware.scale_up_2_num_gpus,
+                config.hardware.scale_up_2_bw_gbps,
+                config.hardware.scale_up_2_efficiency,
+                config.hardware.scale_out_bw_gbps,
+                config.hardware.scale_out_efficiency,
+            )
+        else:
+            logger.info(
+                "Configured standard-node topology: intra-node=%s GPUs at %.3f GB/s "
+                "(collective efficiency %.3f, P2P efficiency %.3f), "
+                "Scale-Out=%.3f GB/s (efficiency %.3f).",
+                config.hardware.intra_node_num_gpus,
+                config.hardware.intra_bw_gbps,
+                config.hardware.intra_node_efficiency,
+                config.hardware.p2p_intra_efficiency,
+                config.hardware.scale_out_bw_gbps,
+                config.hardware.scale_out_efficiency,
+            )
 
     simulator = CommunicationSimulator()
     simulator.initialize_parallelism(
@@ -516,11 +553,15 @@ def build_communication_simulator(config):
         ep_size=config.parallel.ep_size,
         etp_size=config.parallel.etp_size,
         gpus_per_node=config.hardware.gpus_per_node,
+        nodes_per_supernode=config.hardware.nodes_per_supernode,
+        use_supernode=config.hardware.use_supernode,
         gpu_model=GPUType.BW1000,
         intra_node_bandwidth_gbps=config.hardware.intra_bw_gbps,
         inter_node_bandwidth_gbps=config.hardware.inter_bw_gbps,
+        scale_up_bandwidth_gbps=config.hardware.scale_up_bw_gbps,
         p2p_intra_efficiency=config.hardware.p2p_intra_efficiency,
         collective_intra_efficiency=config.hardware.collective_intra_efficiency,
+        collective_scale_up_efficiency=config.hardware.collective_scale_up_efficiency,
         collective_inter_efficiency=config.hardware.collective_inter_efficiency,
         bandwidth_table_dir=(
             files("hcu_train_simulator.communication.bandwidth")
@@ -602,13 +643,14 @@ def estimate_param_sync_communication_time(simulator, config, group_type, group_
 
 
 def estimate_dp_communication_time(simulator, config, dp_size):
+    dp_cp_size = dp_size * config.parallel.cp_size
     return estimate_param_sync_communication_time(
         simulator,
         config,
-        GroupType.DP,
-        dp_size,
+        GroupType.DP_CP,
+        dp_cp_size,
         estimate_dp_param_elements(config),
-        "DP",
+        "DP-with-CP",
     )
 
 
@@ -753,7 +795,6 @@ def estimate_communication(compute_result=None, log_result=False):
     seq_length = config.parallel.seq_length
     hidden_size = config.transformer.hidden_size
     num_experts = config.transformer.num_moe_experts
-    top_k = config.transformer.moe_router_topk
     kv_dim = kv_cache_dim(config)
     layers_per_pp_rank = get_layers_per_pp_rank(config)
     moe_layers_per_pp_rank = get_moe_layers_per_pp_rank(config)
@@ -769,7 +810,6 @@ def estimate_communication(compute_result=None, log_result=False):
     tp = config.parallel.tp_size
     pp = config.parallel.pp_size
     cp = config.parallel.cp_size
-    ep = config.parallel.ep_size
     etp = config.parallel.etp_size
     vp = max(config.parallel.vp_size, 1)
     pp_schedule = config.parallel.pp_schedule
@@ -913,7 +953,7 @@ def estimate_communication(compute_result=None, log_result=False):
             raw_result["ep"] = number * single_ep_time
             logger.debug("EP raw time: %.6fs", raw_result["ep"])
 
-        data_size = comm_bytes * micro_batch_size * seq_length * hidden_size * top_k / ep
+        data_size = moe_etp_activation_payload_bytes(config)
         number = 3 * moe_layers * num_microbatches
         etp_time = estimate_ag_rs_communication_time(
             simulator,
