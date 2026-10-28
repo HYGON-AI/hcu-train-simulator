@@ -179,6 +179,8 @@ def report_data_processing(memory_result, compute_result, comm_result):
     model_statistics = ModelStatistics()
     model_size = model_statistics.compute_model_size()
     logger.info("Model Size: %.4fB parameters", model_size / 1e9)
+    if spec_uses_moe(config.model_spec):
+        logger.info("Active Parameters: %.1fB parameters", model_statistics.compute_active_model_size() / 1e9)
     model_flops = model_statistics.compute_flops()
 
     # 汇总计算和通信时间，报告统一使用毫秒。
@@ -663,6 +665,8 @@ def run_simulation(
     # 默认生成 HTML 报告，开发验证时可通过开关关闭。
     html_output = generate_training_report(
         model_b=round(model_size / 1e9, 2),
+        active_model_b=(round(ModelStatistics().compute_active_model_size() / 1e9, 1)
+                        if spec_uses_moe(config.model_spec) else None),
         total_gpus=config.parallel.num_gpus,
         gpus_per_node=config.hardware.gpus_per_node,
         tgs=tgs,

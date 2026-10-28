@@ -6,6 +6,7 @@ from hcu_train_simulator.communication.groups import GroupManager
 from hcu_train_simulator.communication.topology import Topology
 from hcu_train_simulator.communication.types import Algorithm, CommType, GPUType, GroupType, LinkType, SingleFlow
 from hcu_train_simulator.logging import get_logger
+from hcu_train_simulator.efficiency_tiers import communication_size_factor
 
 import os
 import re
@@ -266,7 +267,8 @@ class CommunicationEngine:
                  collective_intra_efficiency: float = 1.0,
                  collective_inter_efficiency: float = 1.0,
                  scale_up_bandwidth_gbps: float = None,
-                 collective_scale_up_efficiency: float = 1.0):
+                 collective_scale_up_efficiency: float = 1.0,
+                 use_tiered_communication_efficiency: bool = True):
         self.topology = topology
         self.group_manager = GroupManager(topology)
         self.algorithms: Dict[CommType, object] = {}
@@ -282,6 +284,7 @@ class CommunicationEngine:
         self.collective_intra_efficiency = collective_intra_efficiency
         self.collective_scale_up_efficiency = collective_scale_up_efficiency
         self.collective_inter_efficiency = collective_inter_efficiency
+        self.use_tiered_communication_efficiency = use_tiered_communication_efficiency
         self.bandwidth_lookup = None
         if bandwidth_table_dir and gpu_model:
             self.bandwidth_lookup = BandwidthLookup(bandwidth_table_dir)
@@ -356,19 +359,23 @@ class CommunicationEngine:
                     if com_type == CommType.P2P
                     else self.collective_intra_efficiency
                 )
-                return self.intra_node_bandwidth_gbps * efficiency
-            if link_type == LinkType.SCALE_UP_2:
-                return self.scale_up_bandwidth_gbps * self.collective_scale_up_efficiency
-            return self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
-
-        if link_type == LinkType.INTRA_NODE:
+                bandwidth = self.intra_node_bandwidth_gbps * efficiency
+            elif link_type == LinkType.SCALE_UP_2:
+                bandwidth = self.scale_up_bandwidth_gbps * self.collective_scale_up_efficiency
+            else:
+                bandwidth = self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
+        elif link_type == LinkType.INTRA_NODE:
             efficiency = (
                 self.p2p_intra_efficiency
                 if com_type == CommType.P2P
                 else self.collective_intra_efficiency
             )
-            return self.intra_node_bandwidth_gbps * efficiency
-        return self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
+            bandwidth = self.intra_node_bandwidth_gbps * efficiency
+        else:
+            bandwidth = self.inter_node_bandwidth_gbps * self.collective_inter_efficiency
+        if self.use_tiered_communication_efficiency:
+            bandwidth *= communication_size_factor(flow.size)
+        return bandwidth
 
     def simulate_communication_time(self, flows: List[SingleFlow], com_type: CommType = None, nranks: int = None,
                                     data_size: int = None, group_info=None) -> float:
@@ -544,7 +551,8 @@ class CommunicationSimulator:
                          nodes_per_supernode: int = 1,
                          scale_up_bandwidth_gbps: float = None,
                          collective_scale_up_efficiency: float = 1.0,
-                         use_supernode: bool = False):
+                         use_supernode: bool = False,
+                         use_tiered_communication_efficiency: bool = True):
         """
         初始化并行配置
         :param gpu_model: GPU型号字符串，如 "bw500SM"，将用于查找表文件名
@@ -582,6 +590,7 @@ class CommunicationSimulator:
             collective_intra_efficiency=collective_intra_efficiency,
             collective_scale_up_efficiency=collective_scale_up_efficiency,
             collective_inter_efficiency=collective_inter_efficiency,
+            use_tiered_communication_efficiency=use_tiered_communication_efficiency,
         )
         dp_size = num_gpus // (tp_size * cp_size * pp_size)
         if dp_size == 0:

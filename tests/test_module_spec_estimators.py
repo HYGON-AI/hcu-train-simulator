@@ -3,10 +3,13 @@
 
 import unittest
 from dataclasses import replace
+from types import SimpleNamespace
 
 from hcu_train_simulator.config.models import SimulationConfig
 from hcu_train_simulator.context import reset_config, set_config
 from hcu_train_simulator.modeling import ComputeModel, ModuleSpecMemoryModel
+from hcu_train_simulator.communication.communication_simulator import CommunicationEngine
+from hcu_train_simulator.communication.types import CommType, LinkType
 from hcu_train_simulator.modeling.parameters import ParameterModel
 from hcu_train_simulator.modeling.spec import get_representative_layer_spec
 from hcu_train_simulator.modeling.spec import (
@@ -186,6 +189,34 @@ def build_qwen35_config(*, moe=False):
 class ModuleSpecEstimatorTest(unittest.TestCase):
     def tearDown(self):
         reset_config()
+
+    def test_theoretical_gemm_shape_tiers_can_be_disabled(self):
+        config = build_config()
+        set_config(config)
+        model = ComputeModel()
+        small = model.calc_compute_time(256, 4096, 4096, 1)
+        large = model.calc_compute_time(4096, 4096, 4096, 1)
+        model.use_tiered_gemm_efficiency = False
+        self.assertAlmostEqual(small / model.calc_compute_time(256, 4096, 4096, 1), 1 / 0.15)
+        self.assertAlmostEqual(large, model.calc_compute_time(4096, 4096, 4096, 1))
+
+    def test_theoretical_communication_size_tiers_can_be_disabled(self):
+        topology = SimpleNamespace(
+            get_link_type=lambda src, dest: LinkType.INTRA_NODE,
+            use_supernode=False,
+        )
+        engine = CommunicationEngine(topology, 100, 50, p2p_intra_efficiency=0.8)
+        flow = SimpleNamespace(src=0, dest=1, size=32 * 1024)
+        tiered = engine.simulate_communication_time([flow], CommType.P2P)
+        engine.use_tiered_communication_efficiency = False
+        self.assertAlmostEqual(tiered / engine.simulate_communication_time([flow], CommType.P2P), 1 / 0.02)
+
+    def test_moe_active_parameters_use_topk_fraction(self):
+        config = build_config(moe=True)
+        set_config(config)
+        estimate = ModuleSpecMemoryModel(config).model_parameter_estimate()
+        expected = estimate.dense_elements + estimate.expert_elements * 2 / 8
+        self.assertEqual(ModelStatistics().compute_active_model_size(), expected)
 
     def test_memory_tree_sums_concrete_module_costs(self):
         config = build_config()

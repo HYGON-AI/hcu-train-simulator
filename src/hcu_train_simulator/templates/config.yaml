@@ -125,6 +125,8 @@ hardware_config:
 
   # true: use built-in measured bandwidth tables; false: use bandwidths below
   use_bandwidth_table: True
+  # Apply fixed message-size tiers only when use_bandwidth_table is false.
+  use_tiered_communication_efficiency: True
 
   # Tensor Core FP16
   fp16_tflops: 480
@@ -162,6 +164,8 @@ hardware_config:
 
   # GEMM Computational Efficiency
   gemm_efficiency: 0.6
+  # Apply fixed shape tiers to analytical GEMM estimates only.
+  use_tiered_gemm_efficiency: True
 
   # Non-GEMM vector/elementwise compute efficiency
   non_gemm_efficiency: 0.08

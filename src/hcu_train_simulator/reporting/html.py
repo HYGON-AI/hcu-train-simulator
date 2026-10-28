@@ -33,6 +33,7 @@ def generate_training_report(
         model_details: Optional[Dict[str, Any]] = None,
         profile_summary: Optional[Dict[str, Any]] = None,
         ep_details: Optional[Dict[str, Any]] = None,
+        active_model_b: Optional[float] = None,
 ) -> str:
     """
     生成大模型训练模拟报告HTML
@@ -457,7 +458,7 @@ def generate_training_report(
     <div class="cards">
         <div class="card">
             <div class="card-label" style="font-size: 15px; font-weight: bold;">模型尺寸</div>
-            <div class="card-value">{model_b}<span class="card-unit"> B</span></div>
+            <div class="card-value">{model_b}<span class="card-unit"> B</span>{f'<span style="font-size: 12px; font-weight: normal;"> (激活参数量 {active_model_b:.1f}B)</span>' if active_model_b is not None else ''}</div>
         </div>
         <div class="card">
             <div class="card-label" style="font-size: 15px; font-weight: bold;">GPU总数</div>

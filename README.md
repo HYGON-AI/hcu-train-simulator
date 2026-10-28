@@ -110,6 +110,7 @@ VPP 候选。非空候选自动使用 `interleaved_1f1b` 并启用 P2P overlap�
 |         fp8_tflops          |  960   |        FP8峰值算力（TFLOPS）        |
 |           hbm_gib           |   64   |         单卡HBM容量（GiB）          |
 |       use_bandwidth_table   |  true  |      是否使用内置实测通信带宽       |
+| use_tiered_communication_efficiency | true | 理论通信带宽是否按单条消息大小分层；详见 [分层效率说明](docs/tiered_efficiency.md) |
 |       use_supernode         | false  | 是否使用两级 Scale Up 超节点拓扑    |
 |   intra_node_num_gpus       |   /    | 普通节点模式下的单节点 GPU 数       |
 |   intra_node_bw_gbps        |   /    | 普通节点模式节点内带宽（GB/s）      |
@@ -124,6 +125,7 @@ VPP 候选。非空候选自动使用 `interleaved_1f1b` 并启用 P2P overlap�
 | scale_out_efficiency        |   /    | 共用的 Scale Out 通信效率           |
 | p2p_intra_efficiency        |   /    | 普通节点内或一级域内的 P2P 通信效率 |
 |       gemm_efficiency       |  0.6   |            GEMM计算效率             |
+| use_tiered_gemm_efficiency | true | 理论 GEMM 效率是否按 shape 分层；详见 [分层效率说明](docs/tiered_efficiency.md) |
 |     non_gemm_efficiency     |  0.08  | 非 GEMM vector/elementwise 计算效率 |
 |    optimizer_efficiency     |  0.04  |       Optimizer step 计算效率       |
 

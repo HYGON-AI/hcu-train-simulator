@@ -45,6 +45,12 @@ class ModelStatistics:
         logger.debug("model size: %.2fB", round(all_params / 1e9, 2))
         return all_params
 
+    def compute_active_model_size(self):
+        """Backbone parameters used per token, including routed top-k experts."""
+        estimate = ModuleSpecMemoryModel(get_config()).model_parameter_estimate()
+        expert_fraction = min(1.0, self.moe_router_topk / self.num_moe_experts)
+        return estimate.dense_elements + estimate.expert_elements * expert_fraction
+
     def compute_flops(self):
         """Return global training FLOPs for the resolved heterogeneous spec."""
 
