@@ -563,6 +563,7 @@ def build_communication_simulator(config):
         collective_intra_efficiency=config.hardware.collective_intra_efficiency,
         collective_scale_up_efficiency=config.hardware.collective_scale_up_efficiency,
         collective_inter_efficiency=config.hardware.collective_inter_efficiency,
+        use_tiered_communication_efficiency=config.hardware.use_tiered_communication_efficiency,
         bandwidth_table_dir=(
             files("hcu_train_simulator.communication.bandwidth")
             if use_bandwidth_table

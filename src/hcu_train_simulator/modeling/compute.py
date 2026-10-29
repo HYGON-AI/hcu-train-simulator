@@ -3,6 +3,7 @@
 
 from hcu_train_simulator.config.utils import flatten_dataclass
 from hcu_train_simulator.context import get_config
+from hcu_train_simulator.efficiency_tiers import gemm_shape_factor
 from hcu_train_simulator.modeling.architecture import (
     attention_output_dim,
     attention_score_dim,
@@ -80,7 +81,8 @@ class ComputeModel:
 
     def calc_compute_time(self, m, n, k, num_compute, *, use_fp8=False):
         tflops = self.compute_tflops(use_fp8=use_fp8)
-        return 2 * m * n * k / (tflops * self.gemm_efficiency) / 1e9 * num_compute
+        factor = gemm_shape_factor(m, n, k) if self.use_tiered_gemm_efficiency else 1.0
+        return 2 * m * n * k / (tflops * self.gemm_efficiency * factor) / 1e9 * num_compute
 
     def calc_non_gemm_time(self, elements, ops_per_element, num_compute=1, efficiency=None):
         if not elements or not ops_per_element or not num_compute:
@@ -339,8 +341,12 @@ class ComputeModel:
         )
 
         tflops = self.compute_tflops(use_fp8=self.use_fp8_training)
-        forward_time = forward_flops * num_compute / (tflops * self.gemm_efficiency) / 1e9
-        backward_time = backward_flops * num_compute / (tflops * self.gemm_efficiency * 0.88) / 1e9
+        shape_factor = (
+            gemm_shape_factor(self.micro_batch_size * local_seq, self.seq_length, per_head_qk)
+            if self.use_tiered_gemm_efficiency else 1.0
+        )
+        forward_time = forward_flops * num_compute / (tflops * self.gemm_efficiency * shape_factor) / 1e9
+        backward_time = backward_flops * num_compute / (tflops * self.gemm_efficiency * shape_factor * 0.88) / 1e9
         return num_compute, forward_time, backward_time
 
     def attention_parts(self):

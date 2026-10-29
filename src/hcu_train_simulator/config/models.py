@@ -349,6 +349,8 @@ class HardwareConfig:
     non_gemm_efficiency: float = 0.08
     optimizer_efficiency: float = 0.04
     use_bandwidth_table: bool = True
+    use_tiered_gemm_efficiency: bool = True
+    use_tiered_communication_efficiency: bool = True
     # Resolved communication fields. New YAML should use the explicit
     # mode-specific names handled by from_dict; these fields keep downstream
     # code and legacy YAML compatible.
@@ -412,6 +414,8 @@ class HardwareConfig:
             non_gemm_efficiency=config.get("non_gemm_efficiency", 0.08),
             optimizer_efficiency=config.get("optimizer_efficiency", 0.04),
             use_bandwidth_table=config.get("use_bandwidth_table", True),
+            use_tiered_gemm_efficiency=config.get("use_tiered_gemm_efficiency", True),
+            use_tiered_communication_efficiency=config.get("use_tiered_communication_efficiency", True),
             use_supernode=use_supernode,
             inter_bw_gbps=scale_out_bw or 0,
             collective_inter_efficiency=scale_out_efficiency or 0,
