@@ -124,7 +124,7 @@ def validate_config():
             "MLA KV up projection dim must be divisible by tp_size."
         assert attention_output_dim(config) % parallel_config.tp_size == 0, \
             "MLA attention output dim must be divisible by tp_size."
-    else:
+    elif not config.model_spec.metainfo.get("replicated_kv", False):
         assert model_config.num_query_groups % parallel_config.tp_size == 0, \
             "num_query_groups must be divisible by tp_size."
 

@@ -68,9 +68,9 @@ class ParameterModel:
             fused_norm = attention.submodules.linear_q.params.get("fused_norm_scope")
         elif hasattr(attention.submodules, "in_proj_qkv"):
             fused_norm = attention.submodules.in_proj_qkv.params.get("fused_norm_scope")
-        elif attention.submodules.linear_q_down_proj is not None:
+        elif getattr(attention.submodules, "linear_q_down_proj", None) is not None:
             fused_norm = attention.submodules.linear_q_down_proj.params.get("fused_norm_scope")
-        elif attention.submodules.linear_q_proj is not None:
+        elif getattr(attention.submodules, "linear_q_proj", None) is not None:
             fused_norm = attention.submodules.linear_q_proj.params.get("fused_norm_scope")
         if fused_norm:
             total -= self.config.transformer.hidden_size

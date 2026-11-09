@@ -59,6 +59,7 @@ class ModelStatistics:
         num_tokens = self.global_batch_size * seq
         train_matmul = 6
         total_per_token = 0
+        component_flops = 0
 
         for layer in get_layer_specs(self.model_spec):
             attention = get_attention_spec(layer)
@@ -107,10 +108,19 @@ class ModelStatistics:
                 )
             else:
                 total_per_token += train_matmul * 3 * hidden * self.ffn_hidden_size
+            for residual in (layer.submodules.self_attn_bda, layer.submodules.mlp_bda):
+                residual_flops = get_component_flops(residual)
+                if residual_flops is not None:
+                    component_flops += residual_flops(self, residual, train_matmul)
 
-        total = num_tokens * total_per_token
+        total = num_tokens * total_per_token + component_flops
         total += num_tokens * train_matmul * self.vocab_size * hidden * output_loss_factor(self)
 
+        final_norm = self.model_spec.submodules.decoder.submodules.layer_norm
+        if final_norm is not None:
+            final_flops = get_component_flops(final_norm)
+            if final_flops is not None:
+                total += final_flops(self, final_norm, train_matmul)
         for component in (
             getattr(self.model_spec.submodules, "vision_model", None),
             getattr(self.model_spec.submodules, "mtp", None),

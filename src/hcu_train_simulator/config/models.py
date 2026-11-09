@@ -161,6 +161,7 @@ class TransformerConfig:
     moe_shared_expert_gate: bool
     partial_rotary_factor: float
     mtp_use_dedicated_embeddings: bool
+    architecture_options: dict = field(default_factory=dict, metadata={"flatten": False})
 
     @classmethod
     def from_dict(cls, config):
@@ -187,7 +188,7 @@ class TransformerConfig:
                 "ffn_hidden_size",
                 default=moe_ffn_hidden_size,
             ),
-            num_moe_experts=_first_present(config, "num_experts", "n_routed_experts"),
+            num_moe_experts=_first_present(config, "num_experts", "n_routed_experts", "num_local_experts"),
             moe_router_topk=_first_present(
                 config,
                 "num_experts_per_tok",
@@ -261,6 +262,7 @@ class TransformerConfig:
             mtp_use_dedicated_embeddings=bool(
                 config.get("mtp_use_dedicated_embeddings", False)
             ),
+            architecture_options=config.get("architecture_options", {}),
         )
 
 
