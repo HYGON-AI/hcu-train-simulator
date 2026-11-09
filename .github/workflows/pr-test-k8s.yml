@@ -1,0 +1,57 @@
+# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Test K8s
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-test-k8s-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulation-st:
+    name: Simulation ST K8s
+    runs-on: hygon-build
+    timeout-minutes: 20
+    container:
+      # Preloaded and verified on nmz1/2/3/4/6; do not publish or retag here.
+      # Non-latest tag uses Kubernetes' default IfNotPresent pull policy.
+      image: hcu-train-simulator:1.0.0
+    env:
+      CI_TEST_IMAGE: hcu-train-simulator:1.0.0
+      CI_TESTED_REVISION: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # For PRs this is the immutable merge revision of the triggering event.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Run simulation tests
+        run: |
+          set -euo pipefail
+          test "${HCU_CI_IN_K8S:-}" = "1"
+          mkdir -p ci_artifacts
+          python .github/scripts/run_simulation_tests.py 2>&1 | tee ci_artifacts/unittest.log
+
+      - name: Upload simulation test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: simulator-k8s-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci_artifacts/
+          if-no-files-found: warn
+          retention-days: 7
