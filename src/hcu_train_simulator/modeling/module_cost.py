@@ -254,6 +254,8 @@ class ModuleSpecMemoryModel:
             return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if module_is(spec, TENorm) and role == "mlp_rmsnorm":
             return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
+        if module_is(spec, TENorm) and role == "attention_rmsnorm":
+            return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if module_is(spec, TENorm) and role == "final_rmsnorm":
             return ActivationEstimate(self._sequence_tokens() * self.hidden_size)
         if role == "lm_head":

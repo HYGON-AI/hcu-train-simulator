@@ -465,8 +465,14 @@ def spec_uses_gated_delta_net(spec: ModuleSpec) -> bool:
 
 
 def spec_uses_vision(spec: ModuleSpec) -> bool:
-    return contains_module(spec, VisionModel)
+    return any(
+        isinstance(item.module, type) and issubclass(item.module, VisionModel)
+        for item in walk_module_specs(spec)
+    )
 
 
 def spec_uses_mtp(spec: ModuleSpec) -> bool:
-    return contains_module(spec, MultiTokenPredictor)
+    return any(
+        module_is(item, MultiTokenPredictor) or item.metainfo.get("is_mtp_layer", False)
+        for item in walk_module_specs(spec)
+    )

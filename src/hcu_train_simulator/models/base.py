@@ -56,6 +56,15 @@ class ModelAdapter:
     def validate(self, simulation_config) -> None:
         """Perform model-family validation after common validation."""
 
+    def pipeline_activation_width(self, config):
+        return config.transformer.hidden_size
+
+    def context_parallel_time(self, simulator, config, num_microbatches):
+        """Return a model-specific CP time in seconds, or use the default estimator."""
+        return None
+
+    def extra_expert_parallel_time(self, simulator, config, num_microbatches):
+        return 0.0
 
 def merge_language_metadata(
     language_config: Mapping[str, Any],

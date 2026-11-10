@@ -116,7 +116,6 @@ PRESETS = {
         "has_qk_norm": True,
     },
 }
-PRESETS.update(benchmark_presets())
 
 
 def positive_int(value: str) -> int:
@@ -142,7 +141,7 @@ def parse_args() -> argparse.Namespace:
         description="Benchmark Megatron-LM style training operators with PyTorch, Transformer Engine, and Flash Attention.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--preset", choices=sorted(PRESETS), default="qwen3_30b_a3b_moe")
+    parser.add_argument("--preset", choices=sorted(PRESETS | benchmark_presets()), default="qwen3_30b_a3b_moe")
     parser.add_argument("--hidden-size", type=positive_int)
     parser.add_argument("--ffn-hidden-size", type=positive_int)
     parser.add_argument("--moe-ffn-hidden-size", type=positive_int)
@@ -241,7 +240,7 @@ def finalize_config(config: dict) -> dict[str, int | float | str | bool | list[s
 
 
 def merged_config(args: argparse.Namespace) -> dict[str, int | float | str | bool | list[str] | Path | None]:
-    config = dict(PRESETS[args.preset])
+    config = dict((PRESETS | benchmark_presets())[args.preset])
     for key, value in vars(args).items():
         if value is not None:
             config[key.replace("-", "_")] = value

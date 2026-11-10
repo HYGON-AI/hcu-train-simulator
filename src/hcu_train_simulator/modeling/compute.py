@@ -366,8 +366,8 @@ class ComputeModel:
             )
         )
 
-    def add_gemm_part(self, result, part, *, count_scale=1.0, module_spec=None, module_path=None):
-        num_compute, m, k, n = resolve_gemm_shape(self, part)
+    def add_gemm_part(self, result, part, *, count_scale=1.0, module_spec=None, module_path=None, gemm_shape=None):
+        num_compute, m, k, n = gemm_shape or resolve_gemm_shape(self, part)
         num_compute *= count_scale
         uses_fp8 = self.uses_fp8_gemm(module_path)
         cur_part_time = self.calc_compute_time(m, n, k, num_compute, use_fp8=uses_fp8)
@@ -725,6 +725,7 @@ class ComputeModel:
             )
         elif module_is(mlp, MoELayer):
             moe_submodules = mlp.submodules
+            hash_routing = moe_submodules.router.params.get("hash_routing", False)
             self.add_gemm_part(
                 result,
                 "topk_router",
@@ -734,8 +735,12 @@ class ComputeModel:
             )
             self.add_non_gemm_part(
                 result,
-                "router_select",
-                self.router_select_element_count(),
+                "hash_router_lookup" if hash_routing else "router_select",
+                (
+                    self.token_count() * self.moe_router_topk
+                    if hash_routing
+                    else self.router_select_element_count()
+                ),
                 compute_count,
                 "router_select",
                 covered_by_measured="topk_router",
@@ -802,6 +807,11 @@ class ComputeModel:
 
         for bda_name in ("self_attn_bda", "mlp_bda"):
             bda_spec = getattr(submodules, bda_name)
+            bda_path = f"{module_path}.{bda_name}"
+            lowering = get_component_lowering(bda_spec)
+            if lowering is not None:
+                lowering(self, result, bda_spec, bda_path)
+                continue
             self.add_non_gemm_part(
                 result,
                 "residual_dropout_add",
@@ -809,7 +819,7 @@ class ComputeModel:
                 compute_count,
                 "residual_dropout_add",
                 module_spec=bda_spec,
-                module_path=f"{module_path}.{bda_name}",
+                module_path=bda_path,
             )
 
     def _merge_module_rows(self, rows):
@@ -871,6 +881,10 @@ class ComputeModel:
                         num_microbatches,
                     )
             if pp_rank == self.pp_size - 1:
+                final_norm = self.model_spec.submodules.decoder.submodules.layer_norm
+                final_lowering = get_component_lowering(final_norm) if final_norm is not None else None
+                if final_lowering is not None:
+                    final_lowering(self, rows, final_norm, "model.decoder.final_norm")
                 mtp_spec = getattr(self.model_spec.submodules, "mtp", None)
                 if mtp_spec is not None:
                     component_lowering = get_component_lowering(mtp_spec)

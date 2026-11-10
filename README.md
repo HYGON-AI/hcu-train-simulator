@@ -58,6 +58,12 @@ src/hcu_train_simulator/
 
 GLM-5（`model_type: glm_moe_dsa`）按 MLA、DeepSeek 稀疏注意力、Dense/MoE FFN 和 MTP 进行建模。计算明细包括多副本闪电索引器的 Q/K/头权重投影、索引分数矩阵乘法、键向量 LayerNorm、索引器 RoPE、分数归约、词元 top-k，以及复杂度为 `O(L * topk)` 的稀疏 MLA 内核。参数和激活估算包括索引器权重、保存的 top-k 索引和融合索引分数工作区。按照公开的 GLM-5/DeepSeek 实现，索引器权重和计算在各 TP 进程上按复制方式处理，不额外计入 TP 集合通信。`indexer_types` 可用于描述 IndexShare 风格的层，使其复用前一个 `full` 索引器的 top-k 选择结果。
 
+DeepSeek-V4 Flash / Pro（`deepseek_v4`）可直接使用官方 Hugging Face `config.json`。模型按层估算滑窗注意力、CSA 和 HCA，计入共享 KV、分组输出投影、mHC、Hash-MoE 和 MTP。适配器也接受 Transformers 的 `layer_types`、`compress_rates` 和 `mlp_layer_types`。`tp_size` 必须整除输出投影的 `o_groups`，单头 KV 在 TP rank 上复制。
+
+DeepSeek-V4.1-Flash（`deepseek_v41`，含 1017）支持官方嵌套配置。模拟覆盖主干预训练，计入 CSA2 的 Full / Reindex / Reuse、跨流水线边界的共享状态、Single-Pass mHC、Engram 和 ViT/图像投影器。检查点里的 DSpark 独立训练，因此主干预训练预算不计入 DSpark。若要估算后训练中候选池对索引开销的影响，可在 `text_config` 中设 `use_hierarchical_indexer: true`。`vision_seq_length` 表示每张图合并前的 patch 数，留空时使用 `max_image_tokens × downsample_ratio²` 作为上限估计。
+
+V4 系列的新算子使用解析估算。V4.1 的视觉模块按第一个 PP stage 上的可训练模块计费，Engram 按 EP × ETP 划分并使用现有优化器显存模型。估算没有单独复刻原论文的 Muon/Sinkhorn 更新、Engram FP8 常驻和重叠预取、分离式视觉训练、索引辅助损失及 DSpark 训练阶段。
+
 Qwen3.5 VLM 检查点可直接使用 HuggingFace 的嵌套配置格式（`text_config` + `vision_config`）。解析后的 Megatron 风格模型规格支持 3:1 的 Gated DeltaNet/门控 softmax 注意力层模式、部分 mRoPE、注意力输出门控、MTP、Dense 或 MoE FFN（包括共享专家门控）、视觉图像块编码器、全部视觉 Transformer 层以及图像块合并器。`parallel_config.vision_seq_length` 控制每张图片的视觉图像块词元数；当其值为 `null` 时，使用 `vision_config.num_position_embeddings`。`parallel_config.vision_num_images` 的默认值为 `1`。
 
 Qwen3-VL 的 Dense 和 MoE 检查点同样可直接使用 HuggingFace 嵌套配置。适配器支持 `qwen3_vl`/`qwen3_vl_moe`、QK 归一化、mRoPE 元数据、`decoder_sparse_step`、`mlp_only_layers`、ViT 图像块编码器、全部视觉 Transformer 层、主图像块合并器，以及 `vision_config.deepstack_visual_indexes` 中列出的所有 DeepStack 合并器。估算会计入 DeepStack 参数、激活、合并器计算，以及添加到语言模型的特征。可运行的 Qwen3-VL-30B-A3B 示例位于 `examples/qwen3_vl_30b_a3b/simulation.yaml`。

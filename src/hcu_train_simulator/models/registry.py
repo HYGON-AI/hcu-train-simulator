@@ -17,6 +17,7 @@ _BUILTIN_MODULES = (
     "hcu_train_simulator.models.qwen3",
     "hcu_train_simulator.models.qwen3_vl",
     "hcu_train_simulator.models.deepseek_v3",
+    "hcu_train_simulator.models.deepseek_v4",
     "hcu_train_simulator.models.qwen3_5",
     "hcu_train_simulator.models.glm5",
     "hcu_train_simulator.models.generic",

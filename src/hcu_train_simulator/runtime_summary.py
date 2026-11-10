@@ -62,6 +62,7 @@ def model_spec_rows(config):
     attention = get_attention_spec(first_layer)
     mlp = get_mlp_spec(first_layer)
     attention_counts = Counter(get_attention_spec(layer).module.__name__ for layer in base_layers)
+    attention_modes = Counter(get_attention_spec(layer).metainfo.get("attention_variant") for layer in base_layers)
     values = {
         "model_adapter": config.model_adapter,
         "backend": config.model_spec.metainfo.get("backend", "/"),
@@ -76,6 +77,8 @@ def model_spec_rows(config):
         "num_layers": len(base_layers),
         "mtp_num_layers": len(layers) - len(base_layers),
     }
+    if len(attention_modes) > len(attention_counts) and None not in attention_modes:
+        values["attention_pattern"] = ", ".join(f"{mode} x{count}" for mode, count in attention_modes.items())
     if config.vision.enabled:
         values.update(
             {
