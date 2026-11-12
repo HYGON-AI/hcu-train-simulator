@@ -16,7 +16,7 @@ operators:
       mean_ms: 0.019651225022971605
       updated_at: '2026-11-12'
     m=1,n=6144,k=12288,dtype=bf16:
-      status: validated®
+      status: validated
       mean_ms: 0.06461708229035136
       updated_at: '2026-11-12'
     m=2,n=256,k=6144,dtype=bf16:
