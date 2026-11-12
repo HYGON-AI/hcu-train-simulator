@@ -280,8 +280,8 @@ Transformer/MoE 规模近似，无法识别的额外字段会被忽略并在终�
 
 Profile 可通过 `profile_config.mode` 选择以下模式：
 
-- `auto`：检测当前 Torch/HCU 训练环境，按算子 shape 依次查询用户 Profile、内置 Profile，并只对缺失 shape 进行实测。
-- `builtin`：没有训练环境时，根据 `builtin_selector` 显式选择内置 Profile。当前 selector 支持 `bw1000`/`bw1100`、Torch `271`/`290` 和 DTK `2604`。
+- `auto`：检测当前 Torch/HCU 训练环境，按算子 shape 查询用户和内置 Profile，并只对缺失 shape 进行实测。
+- `builtin`：没有训练环境时，根据 `builtin_selector` 显式选择内置 Profile。BW1000/BW1100 仍按硬件、Torch 和 DTK 精确匹配；`shaobos2000`/`shaobos4000` 只需指定硬件。
 - `theoretical`：不使用任何实测 Profile，全部使用理论计算结果。
 
 用户 Profile 默认写入 `./profiles/user/`。相对路径以 `config.yaml` 所在目录为基准；目录只在第一次需要记录实测数据时创建。文件名包含硬件、Torch、DTK 以及完整环境指纹，例如：
@@ -304,10 +304,43 @@ GEMM 和 Flash Attention 的 validated shape 只保存 `status`、`mean_ms`、`t
 
 终端和 HTML 报告会区分 `user profile hit`、`builtin profile hit`、`live benchmark` 和 `theoretical`，同时给出忽略的 candidate 数量。内置 Profile 只做精确 selector 匹配，不会自动选择“最接近”的软件版本。
 
+##### shb2000 / shb4000
+
+使用现有 `builtin_selector` 选择 Profile，然后正常运行模拟：
+
+```yaml
+profile_config:
+  mode: builtin
+  builtin_selector:
+    accelerator: shb2000  # 或 shb4000
+```
+
+模拟会直接加载 `profiles/builtin/shb2000.yaml` 或 `shb4000.yaml`，
+无需本机训练环境或 Torch/DTK 版本。`mode: theoretical` 或
+`enabled: false` 可关闭读表。硬件 FLOPS、显存和通信参数仍使用现有配置。
+
+两份 Profile 来算子建模的 GEMM 和 DSA generation，沿用现有 Profile 结构。
+
+- GEMM 将原表 `(M=tokens, N=output, K=input)` 映射为模拟器的
+  `(m=output, n=tokens, k=input)`，按尺寸和 BF16/FP8-block 精确匹配。
+  FP8 路径由 `use_fp8_training` 及各模块的 `compute_dtype` 决定。
+  standalone GEMM 表不替代 grouped GEMM，也不覆盖单独的归一化操作。
+- 训练耗时按 `前向耗时 × 执行次数 × (1 + 模型反向/前向比例)`
+  估算，保留 6 位小数，报告 Source 为 `builtin profile hit`，并注明 `forward/backward scaled`。
+- DSA 表示**整个 attention 模块（含投影和 indexer）**。GLM-5 完整 indexer 路径在
+  batch、heads、TP、上下文长度 `seq_length=step` 匹配时使用。表中精度为 BF16 MLA、
+  FP8 KV、FP8-block GEMM，需要 `benchmark_dtype: bf16` 和 `use_fp8_training: true`。
+  generation 的 `isl=1` 按本卡训练 query 数 `seq_length/cp_size` 线性放大，
+  再按整个 attention 的模型反向/前向比例折算；这是训练估算，不是训练实测。
+  耗时计在 `dsa_sparse_attn` 行，投影、indexer、RoPE 和 sparse attention 等子项置为
+  `covered by dsa_generation`，避免重复计费。shared indexer 路径暂用原有估算。
+
+没有匹配尺寸、精度不匹配或结果未完成时，保留该项理论估算，不做邻近尺寸或跨设备回退。
+整体 MoE generation 数据未混入单个 expert GEMM 的耗时。
+
 ## 4. 扩展新模型
 
 新增模型优先通过 `src/hcu_train_simulator/models/<model>/` 下的适配器和能力注册完成。配置归一化、ModuleSpec 组合、模型特有成本公式以及 GEMM/non-GEMM 实测映射均可保留在模型目录中。
-
 
 ## License
 

@@ -52,9 +52,9 @@ class OperatorProfileCatalog:
             "dtk": normalize_dtk_version(self.config.profile.builtin_dtk),
             "dtype": str(getattr(self.config.parallel, "benchmark_dtype", "bf16") or "bf16").lower(),
         }
-        if not all(selector.values()):
+        if not selector["accelerator"]:
             logger.warning(
-                "builtin profile mode requires accelerator, torch, and dtk selectors"
+                "builtin profile mode requires an accelerator selector"
             )
             return False
 
@@ -64,9 +64,9 @@ class OperatorProfileCatalog:
                 continue
             if (
                 normalize_accelerator(item.get("accelerator")) == selector["accelerator"]
-                and normalize_torch_version(item.get("torch")) == selector["torch"]
-                and normalize_dtk_version(item.get("dtk")) == selector["dtk"]
-                and str(item.get("dtype", "bf16")).lower() == selector["dtype"]
+                and (item.get("torch") is None or normalize_torch_version(item["torch"]) == selector["torch"])
+                and (item.get("dtk") is None or normalize_dtk_version(item["dtk"]) == selector["dtk"])
+                and str(item.get("dtype", "bf16")).lower() in {selector["dtype"], "mixed"}
             ):
                 matches.append((item, data))
 
@@ -129,6 +129,10 @@ class OperatorProfileCatalog:
     def find_non_gemm(self, model_part: Any, elements: Any, dtype: str):
         return self._find("find_non_gemm", model_part, elements, dtype)
 
+    def apply_fused_profiles(self, compute_result):
+        for store in self.builtin_stores:
+            store.apply_fused_profiles(compute_result)
+
     def source_counts(self, compute_result: list[dict[str, Any]]) -> dict[str, int]:
         counts = {
             "user profile hit": 0,
@@ -153,7 +157,7 @@ class OperatorProfileCatalog:
 
     def candidate_count(self) -> int:
         count = 0
-        for store in self.user_stores:
+        for store in [*self.user_stores, *self.builtin_stores]:
             for entries in (store.data.get("candidates") or {}).values():
                 if isinstance(entries, dict):
                     count += len(entries)
