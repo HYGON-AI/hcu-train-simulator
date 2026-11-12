@@ -281,7 +281,7 @@ Transformer/MoE 规模近似，无法识别的额外字段会被忽略并在终�
 Profile 可通过 `profile_config.mode` 选择以下模式：
 
 - `auto`：检测当前 Torch/HCU 训练环境，按算子 shape 查询用户和内置 Profile，并只对缺失 shape 进行实测。
-- `builtin`：没有训练环境时，根据 `builtin_selector` 显式选择内置 Profile。BW1000/BW1100 仍按硬件、Torch 和 DTK 精确匹配；`shaobos2000`/`shaobos4000` 只需指定硬件。
+- `builtin`：没有训练环境时，根据 `builtin_selector` 显式选择内置 Profile。BW1000/BW1100 仍按硬件、Torch 和 DTK 精确匹配；`shb2000`/`shb4000` 只需指定硬件。
 - `theoretical`：不使用任何实测 Profile，全部使用理论计算结果。
 
 用户 Profile 默认写入 `./profiles/user/`。相对路径以 `config.yaml` 所在目录为基准；目录只在第一次需要记录实测数据时创建。文件名包含硬件、Torch、DTK 以及完整环境指纹，例如：
