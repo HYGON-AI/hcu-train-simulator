@@ -1,17 +1,13 @@
 profile:
   schema_version: 1
-  name: shaobos4000
+  name: shb4000
   timing_scope: forward
   dtype: mixed
   updated_at: '2026-11-12'
-  source:
-    file: pv采集算子列表_20261016_SOC仿真结果_summary.xlsx
-    sha256: c55691e74951f675a79931072241a5dd926206d1c3fae778dab840c5db8a100b
-    latency_unit: us
 environment:
   dtype: mixed
   hardware:
-    accelerator: shaobos4000
+    accelerator: shb4000
   software: {}
 operators:
   gemm:
@@ -19,199 +15,123 @@ operators:
       status: validated
       mean_ms: 0.019375125970691402
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 2
-      tflops: 0.16235909922642655
     m=1,n=6144,k=12288,dtype=bf16:
       status: validated
       mean_ms: 0.03891562465578312
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 3
-      tflops: 3.880059624780073
     m=2,n=256,k=6144,dtype=bf16:
       status: validated
       mean_ms: 0.018183374963700764
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 4
-      tflops: 0.3460004544018672
     m=2,n=6144,k=12288,dtype=bf16:
       status: validated
       mean_ms: 0.03776587396860117
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 5
-      tflops: 7.9963696391900445
     m=1,n=4096,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.0260232
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 6
-      tflops: 1.934106797011897
     m=1,n=6144,k=2048,dtype=fp8_block:
       status: validated
       mean_ms: 0.0202
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 7
-      tflops: 1.2458328712871287
     m=2,n=4096,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.025978049542754927
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 8
-      tflops: 3.8749366396552354
     m=2,n=6144,k=2048,dtype=fp8_block:
       status: validated
       mean_ms: 0.020399999999999998
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 9
-      tflops: 2.4672376470588233
     m=6,n=6144,k=12288,dtype=fp8_block:
       status: validated
       mean_ms: 0.032235000003129205
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 10
-      tflops: 28.105154766932003
     m=6,n=24576,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.04467487670481203
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 11
-      tflops: 40.55835094906556
     m=4608,n=4096,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.12201000000000001
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 12
-      tflops: 1900.8952871403983
     m=4608,n=6144,k=2048,dtype=fp8_block:
       status: validated
       mean_ms: 0.07442
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 13
-      tflops: 1558.2386051061542
     m=7808,n=4096,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.17673
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 14
-      tflops: 2223.6717455101
     m=7808,n=6144,k=2048,dtype=fp8_block:
       status: validated
       mean_ms: 0.09644
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 15
-      tflops: 2037.481893322273
     m=8192,n=4096,k=6144,dtype=fp8_block:
       status: validated
       mean_ms: 0.17806
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 16
-      tflops: 2315.6063148152307
     m=8192,n=6144,k=2048,dtype=fp8_block:
       status: validated
       mean_ms: 0.09677
       updated_at: '2026-11-12'
-      source_sheet: gemm_s4000
-      source_row: 17
-      tflops: 2130.3960959801593
   dsa_generation:
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.039122
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 2
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.0394105
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 3
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.0527225
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 4
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.0532685
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 5
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.054652
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 8
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.055961
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 9
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.0715215
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 10
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=64000:
       status: validated
       mean_ms: 0.071607
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 11
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.0727985
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 12
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.0785205
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 13
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.08753799999999999
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 16
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.09029649999999999
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 17
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=16000:
       status: validated
       mean_ms: 0.1703545
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 22
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=128998:
       status: validated
       mean_ms: 0.17555400000000002
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 23
   flash_attention: {}
   non_gemm: {}
 candidates:
@@ -221,141 +141,101 @@ candidates:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 6
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=4,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 7
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=64000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 14
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 15
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 18
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 19
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 20
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 21
       candidate_reason: no final result
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 24
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 25
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 26
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 27
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 28
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=128998:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 29
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=192,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 30
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 31
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=64000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 32
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=384,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 33
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=512,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 34
       candidate_reason: running
     mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=768,isl=1,tp_size=1,step=16000:
       status: candidate
       mean_ms: null
       updated_at: '2026-11-12'
-      source_sheet: s4000_dsa_generation
-      source_row: 35
       candidate_reason: running
   flash_attention: {}
   non_gemm: {}
