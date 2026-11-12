@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import subprocess
 from dataclasses import asdict
@@ -163,6 +164,9 @@ def _as_int(value: Any) -> int | None:
 
 def normalize_accelerator(value: Any) -> str:
     text = _string_or_empty(value).strip().lower()
+    shaobo = re.fullmatch(r"(?:shb)?(2000|4000)", text)
+    if shaobo:
+        return f"shb{shaobo.group(1)}"
     # BW1000 nodes report the board name as ``BW200, UBB BW1000``.  Match the
     # product name before falling back to the first generic BW token, otherwise
     # the same accelerator is incorrectly profiled as ``bw200``.
@@ -407,6 +411,21 @@ class OperatorProfileStore:
         return changed
 
     def find_gemm(self, module: dict[str, Any], dtype: str) -> tuple[dict[str, Any] | None, str]:
+        if self.data.get("profile", {}).get("timing_scope") == "forward":
+            # The workbook uses [tokens, input] @ [input, output]. Simulator
+            # rows use M=output, N=tokens, K=input: this is a fixed convention
+            # conversion, not the generic permutation heuristic.
+            if module.get("grouped_gemm"):
+                return None, ""
+            dtype = "fp8_block" if module.get("compute_dtype") == "fp8" else dtype
+            key = make_profile_key({
+                "m": _as_int(module.get("n")), "n": _as_int(module.get("m")),
+                "k": _as_int(module.get("k")), "dtype": dtype,
+            }, ["m", "n", "k", "dtype"])
+            entry = self.data.get("operators", {}).get("gemm", {}).get(key)
+            if self._is_valid_forward_entry(entry):
+                return {**entry, "timing_scope": "forward"}, f"{self.source} (forward/backward scaled)"
+            return None, ""
         target = [
             _as_int(module.get("m")),
             _as_int(module.get("n")),
@@ -445,6 +464,68 @@ class OperatorProfileStore:
                 if entry_is_validated(value):
                     return value, f"{self.source} (permuted)"
         return None, ""
+
+    @staticmethod
+    def _is_valid_forward_entry(entry):
+        value = entry.get("mean_ms") if isinstance(entry, dict) else None
+        return (
+            entry_is_validated(entry)
+            and isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > 0
+        )
+
+    def apply_fused_profiles(self, compute_result):
+        """Use whole DSA generation timings once, scaled to training work."""
+        if self.data.get("profile", {}).get("timing_scope") != "forward":
+            return
+        parallel = self.config.parallel
+        transformer = self.config.transformer
+        # The supplied table contains full indexers, BF16 MLA, FP8 KV and
+        # FP8-block GEMMs. Shared-indexer and other precision paths fall back.
+        if (
+            self.config.model_adapter != "glm5"
+            or not parallel.use_fp8_training
+            or parallel.benchmark_dtype != "bf16"
+            or "shared" in transformer.indexer_types
+        ):
+            return
+        fields = {
+            "mla_dtype": "bf16", "kv_cache_dtype": "fp8", "gemm_type": "fp8_block",
+            "num_heads": transformer.num_attention_heads // parallel.tp_size,
+            "batch_size": parallel.micro_batch_size, "isl": 1,
+            "tp_size": parallel.tp_size, "step": parallel.seq_length,
+        }
+        key = make_profile_key(fields, list(fields))
+        entry = self.data.get("operators", {}).get("dsa_generation", {}).get(key)
+        if not self._is_valid_forward_entry(entry):
+            return
+        owners = [row for row in compute_result if row.get("model_part") == "dsa_sparse_attn"]
+        if len(owners) != 1:
+            return
+        owner = owners[0]
+        attention_rows = [row for row in compute_result if ".self_attention." in row.get("module_path", "")]
+        if owner not in attention_rows:
+            return
+        forward = sum(row["forward_ms"] for row in attention_rows)
+        backward = sum(row["backward_ms"] for row in attention_rows)
+        if forward <= 0:
+            return
+        # The table measures one generation query. Context length, batch,
+        # heads, TP and precision must match; scale query work linearly to
+        # the rank-local training sequence, then retain the modeled B/F ratio.
+        query_scale = parallel.seq_length // parallel.cp_size
+        total_forward = entry["mean_ms"] * query_scale * owner["compute_count"]
+        owner["benchmark_time_ms"] = round(total_forward * (1 + backward / forward), 6)
+        owner["benchmark_source"] = f"{self.source} (DSA generation; query and forward/backward scaled)"
+        owner["profile_forward_ms"] = total_forward
+        owner["profile_query_scale"] = query_scale
+        owner["profile_training_scale"] = 1 + backward / forward
+        owner["profile_covers_fused_ops"] = False
+        for row in attention_rows:
+            if row is not owner:
+                row["benchmark_time_ms"] = 0
+                row["benchmark_source"] = "covered by dsa_generation"
+                row["profile_covers_fused_ops"] = False
 
     def find_flash_attention(self, dtype: str, module: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, str]:
         key = self.flash_attention_key(dtype, module)
@@ -643,6 +724,8 @@ def apply_profile_to_compute_result(compute_result: list[dict[str, Any]], profil
     dtype = getattr(config.parallel, "benchmark_dtype", "bf16")
     for module in compute_result:
         module["all_time_ms"] = module.get("all_time_ms", module["forward_ms"] + module["backward_ms"])
+        for field in ("profile_forward_ms", "profile_query_scale", "profile_training_scale", "profile_covers_fused_ops"):
+            module.pop(field, None)
         module["benchmark_time_ms"] = "/"
         module["benchmark_source"] = "/"
 
@@ -656,8 +739,18 @@ def apply_profile_to_compute_result(compute_result: list[dict[str, Any]], profil
             entry, source = None, ""
 
         if entry and entry.get("mean_ms") is not None:
-            module["benchmark_time_ms"] = round(float(entry["mean_ms"]) * get_compute_multiplier(module, config), 2)
+            if entry.get("timing_scope") == "forward":
+                forward = module["forward_ms"]
+                scale = (forward + module["backward_ms"]) / forward if forward > 0 else 3.0
+                total_forward = float(entry["mean_ms"]) * module["compute_count"]
+                module["benchmark_time_ms"] = round(total_forward * scale, 6)
+                module["profile_forward_ms"] = total_forward
+                module["profile_training_scale"] = scale
+                module["profile_covers_fused_ops"] = False
+            else:
+                module["benchmark_time_ms"] = round(float(entry["mean_ms"]) * get_compute_multiplier(module, config), 2)
             module["benchmark_source"] = source
+    profile_store.apply_fused_profiles(compute_result)
     return compute_result
 
 

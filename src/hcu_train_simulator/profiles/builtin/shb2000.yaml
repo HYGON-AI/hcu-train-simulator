@@ -1,0 +1,223 @@
+profile:
+  schema_version: 1
+  name: shb2000
+  timing_scope: forward
+  dtype: mixed
+  updated_at: '2026-11-12'
+environment:
+  dtype: mixed
+  hardware:
+    accelerator: shb2000
+  software: {}
+operators:
+  gemm:
+    m=1,n=256,k=6144,dtype=bf16:
+      status: validated
+      mean_ms: 0.019651225022971605
+      updated_at: '2026-11-12'
+    m=1,n=6144,k=12288,dtype=bf16:
+      status: validated
+      mean_ms: 0.06461708229035136
+      updated_at: '2026-11-12'
+    m=2,n=256,k=6144,dtype=bf16:
+      status: validated
+      mean_ms: 0.018059566430747416
+      updated_at: '2026-11-12'
+    m=2,n=6144,k=12288,dtype=bf16:
+      status: validated
+      mean_ms: 0.06271981392055755
+      updated_at: '2026-11-12'
+    m=1,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.031094116810709192
+      updated_at: '2026-11-12'
+    m=1,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.02035
+      updated_at: '2026-11-12'
+    m=2,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.029742009658366427
+      updated_at: '2026-11-12'
+    m=2,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.02038
+      updated_at: '2026-11-12'
+    m=6,n=6144,k=12288,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.04419842977076762
+      updated_at: '2026-11-12'
+    m=6,n=24576,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.06979
+      updated_at: '2026-11-12'
+    m=4608,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.20636000000000002
+      updated_at: '2026-11-12'
+    m=4608,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.13713999999999998
+      updated_at: '2026-11-12'
+    m=7808,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.40735000000000005
+      updated_at: '2026-11-12'
+    m=7808,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.21051
+      updated_at: '2026-11-12'
+    m=8192,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.40538
+      updated_at: '2026-11-12'
+    m=8192,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.21081
+      updated_at: '2026-11-12'
+  dsa_generation:
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.043574916000000005
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.043845396
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.061905816
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.062182176
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=4,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.065821308
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=4,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.06737656800000001
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.07265328
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.07656642
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.084906024
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=64000:
+      status: validated
+      mean_ms: 0.08556987599999999
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.088235868
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.1031793
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=64000:
+      status: validated
+      mean_ms: 0.10853597999999999
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.108723552
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.124449612
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.13142799600000002
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.164972808
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.174630708
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.205446612
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.215614308
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.281529696
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.29568814800000004
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.354648672
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.371363748
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.424304916
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.44091473999999997
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.628267416
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.654742704
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=192,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.830072544
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 1.191422652
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=64000:
+      status: validated
+      mean_ms: 1.229142264
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=384,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 1.655091816
+      updated_at: '2026-11-12'
+  flash_attention: {}
+  non_gemm: {}
+candidates:
+  gemm: {}
+  dsa_generation:
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=512,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=768,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+  flash_attention: {}
+  non_gemm: {}

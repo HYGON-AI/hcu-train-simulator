@@ -1,0 +1,241 @@
+profile:
+  schema_version: 1
+  name: shb4000
+  timing_scope: forward
+  dtype: mixed
+  updated_at: '2026-11-12'
+environment:
+  dtype: mixed
+  hardware:
+    accelerator: shb4000
+  software: {}
+operators:
+  gemm:
+    m=1,n=256,k=6144,dtype=bf16:
+      status: validated
+      mean_ms: 0.019375125970691402
+      updated_at: '2026-11-12'
+    m=1,n=6144,k=12288,dtype=bf16:
+      status: validated
+      mean_ms: 0.03891562465578312
+      updated_at: '2026-11-12'
+    m=2,n=256,k=6144,dtype=bf16:
+      status: validated
+      mean_ms: 0.018183374963700764
+      updated_at: '2026-11-12'
+    m=2,n=6144,k=12288,dtype=bf16:
+      status: validated
+      mean_ms: 0.03776587396860117
+      updated_at: '2026-11-12'
+    m=1,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.0260232
+      updated_at: '2026-11-12'
+    m=1,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.0202
+      updated_at: '2026-11-12'
+    m=2,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.025978049542754927
+      updated_at: '2026-11-12'
+    m=2,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.020399999999999998
+      updated_at: '2026-11-12'
+    m=6,n=6144,k=12288,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.032235000003129205
+      updated_at: '2026-11-12'
+    m=6,n=24576,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.04467487670481203
+      updated_at: '2026-11-12'
+    m=4608,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.12201000000000001
+      updated_at: '2026-11-12'
+    m=4608,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.07442
+      updated_at: '2026-11-12'
+    m=7808,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.17673
+      updated_at: '2026-11-12'
+    m=7808,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.09644
+      updated_at: '2026-11-12'
+    m=8192,n=4096,k=6144,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.17806
+      updated_at: '2026-11-12'
+    m=8192,n=6144,k=2048,dtype=fp8_block:
+      status: validated
+      mean_ms: 0.09677
+      updated_at: '2026-11-12'
+  dsa_generation:
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.039122
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=1,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.0394105
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.0527225
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=2,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.0532685
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.054652
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=6,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.055961
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.0715215
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=64000:
+      status: validated
+      mean_ms: 0.071607
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=8,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.0727985
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.0785205
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.08753799999999999
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=16,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.09029649999999999
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=16000:
+      status: validated
+      mean_ms: 0.1703545
+      updated_at: '2026-11-12'
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=48,isl=1,tp_size=1,step=128998:
+      status: validated
+      mean_ms: 0.17555400000000002
+      updated_at: '2026-11-12'
+  flash_attention: {}
+  non_gemm: {}
+candidates:
+  gemm: {}
+  dsa_generation:
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=4,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=4,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=64000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=12,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=24,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=32,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: no final result
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=64,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=96,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=128,isl=1,tp_size=1,step=128998:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=192,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=256,isl=1,tp_size=1,step=64000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=384,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=512,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+    mla_dtype=bf16,kv_cache_dtype=fp8,gemm_type=fp8_block,num_heads=64,batch_size=768,isl=1,tp_size=1,step=16000:
+      status: candidate
+      mean_ms: null
+      updated_at: '2026-11-12'
+      candidate_reason: running
+  flash_attention: {}
+  non_gemm: {}
