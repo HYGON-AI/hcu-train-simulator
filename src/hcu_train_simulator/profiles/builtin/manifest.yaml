@@ -1,5 +1,15 @@
 schema_version: 1
 profiles:
+  - id: shb2000
+    file: shb2000.yaml
+    accelerator: shb2000
+    dtype: mixed
+    status: validated
+  - id: shb4000
+    file: shb4000.yaml
+    accelerator: shb4000
+    dtype: mixed
+    status: validated
   - id: bw1000_torch271_dtk2604
     file: bw1000_torch271_dtk2604.yaml
     accelerator: bw1000

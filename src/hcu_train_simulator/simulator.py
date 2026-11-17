@@ -103,7 +103,7 @@ def apply_measured_coverage(compute_result):
     available = {
         module.get("model_part")
         for module in compute_result
-        if _has_measured_or_profile_time(module)
+        if _has_measured_or_profile_time(module) and module.get("profile_covers_fused_ops", True)
     }
     if not available:
         return compute_result

@@ -91,13 +91,8 @@ def validate_config():
         "profile_config.mode must be one of: auto, builtin, theoretical."
     config.profile.mode = profile_mode
     if profile_mode == "builtin":
-        assert all(
-            (
-                config.profile.builtin_accelerator,
-                config.profile.builtin_torch,
-                config.profile.builtin_dtk,
-            )
-        ), "builtin profile mode requires accelerator, torch, and dtk selectors."
+        assert config.profile.builtin_accelerator, \
+            "builtin profile mode requires builtin_selector.accelerator."
 
     assert model_config.hidden_size % parallel_config.tp_size == 0, \
         "hidden_size must be divisible by tp_size."
