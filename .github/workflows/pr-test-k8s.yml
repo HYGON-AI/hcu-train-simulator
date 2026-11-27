@@ -4,9 +4,9 @@
 name: PR Test K8s
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
   workflow_dispatch:
 
 permissions:
@@ -19,6 +19,7 @@ concurrency:
 jobs:
   simulation-st:
     name: Simulation ST K8s
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ci-hcu'
     runs-on: hygon-build
     timeout-minutes: 20
     container:
@@ -27,7 +28,7 @@ jobs:
       image: hcu-train-simulator:1.0.0
     env:
       CI_TEST_IMAGE: hcu-train-simulator:1.0.0
-      CI_TESTED_REVISION: ${{ github.sha }}
+      CI_TESTED_REVISION: ${{ github.event_name == 'workflow_dispatch' && github.sha || format('refs/pull/{0}/merge', github.event.pull_request.number) }}
       PYTHONDONTWRITEBYTECODE: "1"
     defaults:
       run:
@@ -36,8 +37,8 @@ jobs:
       - name: Checkout tested revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # For PRs this is the immutable merge revision of the triggering event.
-          ref: ${{ github.sha }}
+          # For PRs, test the merge revision rather than the base branch.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || format('refs/pull/{0}/merge', github.event.pull_request.number) }}
           persist-credentials: false
 
       - name: Run simulation tests
@@ -55,3 +56,23 @@ jobs:
           path: ci_artifacts/
           if-no-files-found: warn
           retention-days: 7
+
+  cleanup-label:
+    name: Cleanup CI label
+    if: ${{ always() && github.event_name == 'pull_request_target' && github.event.label.name == 'ci-hcu' }}
+    needs: simulation-st
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Remove ci-hcu label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/labels/ci-hcu")
+          [[ "${status}" == 200 || "${status}" == 404 ]]
